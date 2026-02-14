@@ -3,6 +3,7 @@ mod tui;
 mod audio_api;
 mod audio;
 mod middle;
+mod pipeline;
 
 use crossterm::terminal;
 use shared::UiAction;

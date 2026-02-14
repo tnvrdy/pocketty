@@ -1,3 +1,5 @@
+use crate::audio::effect::EffectSpec;
+
 /// The Global Project State
 #[derive(Clone, Debug)]
 pub struct Song {
@@ -40,7 +42,7 @@ pub struct Sound {
     pub length: usize,        // Number of samples to play
     pub gain: f32,            // 0.0 to 1.0 (Volume)
     pub pitch: f32,           // 0.5 to 2.0 (Playback speed)
-    pub effect_chain: Vec<Effect>, // Ordered list of effects
+    pub effect_chain: Vec<EffectSpec>, // Ordered list of effects
 }
 
 impl Default for Sound {
