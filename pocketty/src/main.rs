@@ -30,7 +30,7 @@ fn run() -> anyhow::Result<()> {
     let audio = audio::start_audio()?;
 
     // example of how to play it
-    let (sample_id, buffer) = loader::sample_loader::load(Path::new("/Users/personal_ryanmccormick/Downloads/Code/treehacks26/pocketty/pocketty/src/audio_samples/808CHH01.wav"), 44100)?;
+    let (sample_id, buffer) = loader::sample_loader::load(Path::new("src/audio_samples/808CHH01.wav"), 44100)?;
     let length = buffer.data.len().min(44100);
     audio.send(AudioCommand::RegisterSample { id: sample_id, buffer });
     audio.send(AudioCommand::Trigger(TriggerParams {
@@ -45,6 +45,9 @@ fn run() -> anyhow::Result<()> {
 
     let mut pads_lit = [false; shared::NUM_PADS];
     loop {
+        tui.draw(|frame| {
+            tui::grid::draw_pad_grid(frame, frame.area(), &pads_lit);
+        });
         let action = tui::input::read_action()?;
         match action {
             UiAction::Quit => break,
