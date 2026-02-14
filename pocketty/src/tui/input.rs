@@ -1,12 +1,10 @@
 use crate::shared::{PadId, UiAction};
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind}; // keyevent should handle all keypresses, 
-                                                                // just importing event for future: terminal 
-                                                                // resize, trackpad, etc.
+use crossterm::event::{Event, KeyCode, KeyEventKind};
 
 pub fn read_action() -> anyhow::Result<UiAction> {
     loop { 
         match crossterm::event::read()? {
-            KeyEvent(k) => {
+            Event::Key(k) if k.kind == KeyEventKind::Press => {
                 match k.code {
                     KeyCode::Esc => return Ok(UiAction::Quit),
                     KeyCode::Char(c) => {
@@ -18,7 +16,7 @@ pub fn read_action() -> anyhow::Result<UiAction> {
                     _ => {}
                 }
             }
-            _ => {} 
+            _ => {}
         }
     }
 }
