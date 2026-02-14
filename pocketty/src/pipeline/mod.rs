@@ -1,4 +1,3 @@
-// src/pipeline/mod.rs
-
+pub mod persistence;
+pub mod project;
 pub mod song;
-pub mod sequencer;
