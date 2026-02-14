@@ -1,4 +1,4 @@
-use crate::frame::StereoFrame;
+use super::frame::StereoFrame;
 
 // At some point I'd like to split this effects bit into a folder structure; 
 // the latter half of this event is going to be spent just making cool effects
