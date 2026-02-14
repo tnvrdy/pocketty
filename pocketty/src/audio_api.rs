@@ -1,8 +1,4 @@
-use crate::audio::effect::EffectSpec;
-use crate::audio::sample_buffer::SampleBuffer;
-use crate::audio::SampleId;
-
-pub use crate::audio::SampleId;
+pub use crate::audio::{EffectSpec, SampleBuffer, SampleId};
 
 #[derive(Clone, Debug)]
 pub struct TriggerParams {

@@ -3,7 +3,8 @@ use crate::audio_api::{AudioCommand, TriggerParams};
 
 pub fn action_to_audio(action: UiAction) -> Option<AudioCommand> {
     match action {
-        UiAction::PadDown(pad) => Some(AudioCommand::Trigger(TriggerParams { pad })),
+        // TODO: map PadDown to Trigger(sample_id, trim_start, length, gain, pitch, effect_chain)
+        UiAction::PadDown(_pad) => None,
         _ => None,
     }
 }

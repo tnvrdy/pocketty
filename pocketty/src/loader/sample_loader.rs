@@ -1,7 +1,6 @@
 use std::path::Path;
 
-use crate::audio::sample_buffer::SampleBuffer;
-use crate::audio::{next_sample_id, SampleId};
+use crate::audio::{next_sample_id, SampleId, SampleBuffer};
 
 // Load a WAV from disk, prepare for registration with the engine
 pub fn load(path: &Path, target_rate: u32) -> anyhow::Result<(SampleId, SampleBuffer)> {

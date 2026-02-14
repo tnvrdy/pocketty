@@ -54,6 +54,10 @@ impl Voice {
                 StereoFrame::default() // zeros
             } else { // lerp between the two frames, similar to the resampler
                 let i = self.pos as usize;
+                if i >= self.length { // keep bounded
+                    self.active = false;
+                    break;
+                }
                 let frac = self.pos - i as f32;
                 let idx = self.trim_start + i;
                 let s0 = data[idx];

@@ -2,15 +2,16 @@ mod shared;
 mod tui;
 mod audio_api;
 mod audio;
+mod loader;
 mod middle;
 mod pipeline;
 
+use std::path::Path;
 use crossterm::terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use shared::UiAction;
-// use loader::sample_loader;
-// use audio_api::{AudioCommand, TriggerParams};
+use audio_api::{AudioCommand, TriggerParams};
 
 fn main() {
     if let Err(e) = run() {
@@ -28,14 +29,18 @@ fn run() -> anyhow::Result<()> {
 
     let audio = audio::start_audio()?;
 
-    // An example of how to load a sample and trigger it
-    // let (sample_id, buffer) = sample_loader::load("audio_samples/808CHH01.wav", 44100)?;
-    // audio.send(AudioCommand::RegisterSample { id: sample_id, buffer });
-    // audio.send(AudioCommand::Trigger(TriggerParams {
-    //     sample_id,
-    //     trim_start: 0,
-    //     length: 44100,
-    // }));
+    // example of how to play it
+    let (sample_id, buffer) = loader::sample_loader::load(Path::new("/Users/personal_ryanmccormick/Downloads/Code/treehacks26/pocketty/pocketty/src/audio_samples/808CHH01.wav"), 44100)?;
+    let length = buffer.data.len().min(44100);
+    audio.send(AudioCommand::RegisterSample { id: sample_id, buffer });
+    audio.send(AudioCommand::Trigger(TriggerParams {
+        sample_id,
+        trim_start: 0,
+        length,
+        gain: 1.0,
+        pitch: 1.0,
+        effect_chain: vec![],
+    }));
 
 
     let mut pads_lit = [false; shared::NUM_PADS];

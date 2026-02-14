@@ -1,4 +1,4 @@
-use crate::audio::effect::EffectSpec;
+use crate::audio::EffectSpec;
 
 /// The Global Project State
 #[derive(Clone, Debug)]
