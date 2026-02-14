@@ -1,5 +1,5 @@
 use std::path::Path;
-use crate::audio::frame::StereoFrame;
+use super::frame::StereoFrame;
 
 #[derive(Clone, Debug)]
 pub struct SampleBuffer {

@@ -1,5 +1,5 @@
-use crate::audio::frame::StereoFrame;
-use crate::audio::sample_buffer::SampleBuffer;
+use super::frame::StereoFrame;
+use super::sample_buffer::SampleBuffer;
 
 #[inline]
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
