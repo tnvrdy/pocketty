@@ -40,6 +40,9 @@ fn run() -> anyhow::Result<()> {
 
     let mut pads_lit = [false; shared::NUM_PADS];
     loop {
+        tui.draw(|frame| {
+            tui::grid::draw_pad_grid(frame, frame.area(), &pads_lit);
+        });
         let action = tui::input::read_action()?;
         match action {
             UiAction::Quit => break,
