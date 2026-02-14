@@ -124,6 +124,7 @@ impl Default for ProjectState {
             patterns: std::array::from_fn(|_| Pattern::default()),
             selected_pattern: 0,
             bpm: 120.0,
+            current_step: 0,
             swing: 0.0,
             master_volume: 8,
             pattern_chain: Vec::new(),

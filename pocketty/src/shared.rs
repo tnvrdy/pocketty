@@ -45,14 +45,14 @@ pub const NUM_SOUNDS: usize = 16;
 pub const STEPS_PER_PATTERN: usize = 16;
 
 // ye olde types
-// #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-// pub struct PadId(pub u8);
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PadId(pub u8);
 
-// #[derive(Clone, Debug)]
-// pub enum UiAction {
-//     PadDown(PadId),
-//     Quit,
-// }
+#[derive(Clone, Debug)]
+pub enum UiAction {
+    PadDown(PadId),
+    Quit,
+}
 
 
 #[derive(Clone, Debug, PartialEq)]
