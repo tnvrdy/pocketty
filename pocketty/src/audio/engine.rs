@@ -1,87 +1,102 @@
+use std::collections::HashMap;
+
 use crate::audio_api::{AudioCommand, TriggerParams};
-use crate::shared::PadId;
+use super::effect::{Effect, EffectSpec};
+use super::frame::StereoFrame;
+use super::sample_buffer::SampleBuffer;
+use super::voice::Voice;
+use super::SampleId;
 
-const MAX_VOICES: usize = 16; // hard cap so we wont malloc in audio callback
+const TEMP_BUF_CAP: usize = 8192; // Sort of arbitrarily chosen, but chosen nonetheless
 
-#[derive(Clone, Copy, Debug)]
-struct Voice { // basic oscillator for now
-    phase: f32,
-    phase_inc: f32,
-    amp: f32,
-    decay: f32,
-    alive: bool,
+// An internal attachment between a voice and the params of our trigger call
+struct ActiveVoice {
+    voice: Voice,
+    sample_id: SampleId,
+    effect_chain: Vec<Box<dyn Effect>>,
 }
 
 pub struct Engine {
-    sample_rate: f32,
-    voices: [Voice; MAX_VOICES], // fixed pool of voices
+    samples: HashMap<SampleId, SampleBuffer>, // the sample buffers we've registered
+    active: Vec<ActiveVoice>,
+    temp_buf: Vec<StereoFrame>,
 }
 
 impl Engine {
-    pub fn new(sample_rate: u32) -> Self {
-        // initialize with empty voices
-        let empty = Voice {
-            phase: 0.0,
-            phase_inc: 0.0,
-            amp: 0.0,
-            decay: 1.0,
-            alive: false,
-        };
-
+    pub fn new() -> Self {
         Self {
-            sample_rate: sample_rate as f32,
-            voices: [empty; MAX_VOICES],
+            samples: HashMap::new(),
+            active: Vec::new(),
+            temp_buf: vec![StereoFrame::default(); TEMP_BUF_CAP],
         }
     }
 
     pub fn handle_cmd(&mut self, cmd: AudioCommand) {
         match cmd {
-            AudioCommand::Trigger(t) => self.trigger_voice(t),
+            AudioCommand::RegisterSample { id, buffer } => {
+                self.samples.insert(id, buffer);
+            }
+            AudioCommand::Trigger(params) => {
+                if !self.samples.contains_key(&params.sample_id) {
+                    return;
+                }
+                let effect_chain: Vec<Box<dyn Effect>> = params
+                    .effect_chain
+                    .iter()
+                    .map(EffectSpec::to_effect)
+                    .collect();
+                let voice = Voice::new(
+                    params.trim_start,
+                    params.length,
+                    params.pitch,
+                    params.gain,
+                );
+                self.active.push(ActiveVoice {
+                    voice,
+                    sample_id: params.sample_id,
+                    effect_chain,
+                });
+            }
         }
     }
 
-    fn trigger_voice(&mut self, t: TriggerParams) {
-        let freq = pad_to_freq(t.pad);
-
-        // what slot do we write to?
-        let slot = self.voices.iter().position(|v| !v.alive).unwrap_or(0);
-
-        // radians per sample
-        let phase_inc = (std::f32::consts::TAU * freq) / self.sample_rate;
-
-        // some defaults just for this test
-        self.voices[slot] = Voice {
-            phase: 0.0,
-            phase_inc,
-            amp: 0.25,
-            decay: 0.9995,
-            alive: true,
+    /// Fill the output buffer. Call from the stream callback only.
+    pub fn render_block(&mut self, out: &mut [StereoFrame]) {
+        let n_frames = out.len();
+        if n_frames == 0 {
+            return;
+        }
+        let temp = if n_frames <= self.temp_buf.len() { // a small optimization
+            &mut self.temp_buf[..n_frames]
+        } else {
+            self.temp_buf.resize(n_frames, StereoFrame::default());
+            &mut self.temp_buf[..]
         };
-    }
 
-    pub fn next_sample(&mut self) -> f32 {
-        // arbitrary sine stuff for this checkpoint
-        let mut out = 0.0f32;
-        for v in &mut self.voices {
-            if !v.alive {
+        for f in out.iter_mut() { // clear to zeros
+            *f = StereoFrame::default();
+        }
+
+        for active in &mut self.active { // for each active voice
+            if !active.voice.active {
                 continue;
             }
-            out += v.amp * v.phase.sin();
-            v.phase += v.phase_inc;
-            if v.phase > std::f32::consts::TAU {
-                v.phase -= std::f32::consts::TAU;
+            let Some(buffer) = self.samples.get(&active.sample_id) else { // get the sample buffer for this voice
+                continue;
+            };
+            for f in temp.iter_mut() { // clear the temp buffer to zeros
+                *f = StereoFrame::default();
             }
-            v.amp *= v.decay;
-            if v.amp < 0.0005 {
-                v.alive = false;
+            active.voice.render_into(buffer, temp); // render the voice into the temp buffer
+            for effect in &mut active.effect_chain { // plug in the temp through the effect chain
+                effect.process(temp);
+            }
+            for (i, f) in temp.iter().enumerate().take(n_frames) { // add the temp to the output
+                out[i].left += f.left;
+                out[i].right += f.right;
             }
         }
 
-        out
+        self.active.retain(|a| a.voice.active); // remove voices that have finished playing
     }
-}
-
-fn pad_to_freq(pad: PadId) -> f32 {
-    let semis = pad.0 as f32;
-    220.0 * 2.0_f32.powf(semis / 12.0)
 }
