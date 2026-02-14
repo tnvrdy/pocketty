@@ -3,6 +3,7 @@ mod tui;
 mod audio_api;
 mod audio;
 mod middle;
+mod pipeline;
 
 use crossterm::terminal;
 use shared::UiAction;
@@ -15,7 +16,8 @@ fn main() {
 }
 
 fn run() -> anyhow::Result<()> {
-    terminal::enable_raw_mode()?; // should disable according to docs
+    terminal::enable_raw_mode()?;
+    let _guard = RawModeGuard; // auto drops when out of scope
 
     let audio = audio::start_audio()?;
     loop {
@@ -31,4 +33,11 @@ fn run() -> anyhow::Result<()> {
     }
     drop(audio);
     Ok(())
+}
+
+struct RawModeGuard;
+impl Drop for RawModeGuard {
+    fn drop(&mut self) {
+        let _ = terminal::disable_raw_mode();
+    }
 }
