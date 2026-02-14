@@ -6,7 +6,7 @@ const MAX_VOICES: usize = 16; // hard cap so we wont malloc in audio callback
 #[derive(Clone, Copy, Debug)]
 struct Voice { // basic oscillator for now
     phase: f32,
-    phase_inc: f32
+    phase_inc: f32,
     amp: f32,
     decay: f32,
     alive: bool,
@@ -53,7 +53,7 @@ impl Engine {
         self.voices[slot] = Voice {
             phase: 0.0,
             phase_inc,
-            amp: 0.25 * t.velocity,
+            amp: 0.25,
             decay: 0.9995,
             alive: true,
         };

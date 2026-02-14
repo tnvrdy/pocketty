@@ -1,6 +1,7 @@
 use anyhow::Context;
 use crossbeam_channel::{Receiver, Sender};
 use crate::audio_api::AudioCommand;
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 mod engine;
 use engine::Engine;
@@ -38,7 +39,7 @@ pub fn start_audio() -> anyhow::Result<AudioHandle> {
     Ok(AudioHandle { tx, _stream: stream })
 }
 
-fn build_stream<T: cpal::Sample>(
+fn build_stream<T: cpal::Sample + cpal::SizedSample + cpal::FromSample<f32>>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
     rx: Receiver<AudioCommand>,
@@ -60,7 +61,7 @@ fn build_stream<T: cpal::Sample>(
             // Render audio
             for frame in data.chunks_mut(channels) {
                 let s = engine.next_sample();
-                let v: T = cpal::Sample::from::<f32>(&s);
+                let v: T = T::from_sample::<f32>(s);
                 for ch in frame.iter_mut() {
                     *ch = v;
                 }
