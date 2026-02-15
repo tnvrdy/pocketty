@@ -4,7 +4,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use crate::audio_api::{AudioCommand, TriggerParams};
-use crate::audio::{EffectSpec, SampleId};
+use crate::audio::{next_sample_id, EffectSpec, SampleBuffer, SampleId};
 use crate::loader::sample_loader;
 use crate::pipeline::project::{HeldButtons, ProjectState, SoundSlot};
 use crate::shared::*;
@@ -89,10 +89,26 @@ impl Middle {
                 if self.held.pattern {
                     let pi = self.state.selected_pattern as usize;
                     self.state.patterns[pi] = Default::default();
+                    return vec![];
+                }
+                // Record alone = arm mic recording into selected sound slot
+                if !self.held.sound {
+                    let sid = next_sample_id();
+                    let slot = self.state.selected_sound as usize;
+                    let sound = &mut self.state.sounds[slot];
+                    sound.sample_id = Some(sid);
+                    sound.sample_path = "(recording)".into();
+                    sound.trim_start = 0;
+                    sound.buffer_len = 0;
+                    sound.length = usize::MAX; // voice clamps to actual buffer length
+                    return vec![AudioCommand::StartRecording { sample_id: sid }];
                 }
                 vec![]
             }
-            InputEvent::RecordUp => { self.held.record = false; vec![] }
+            InputEvent::RecordUp => {
+                self.held.record = false;
+                vec![AudioCommand::StopRecording]
+            }
 
             InputEvent::FxDown => {
                 self.held.fx = true;
@@ -475,6 +491,36 @@ impl Middle {
         if (slot as usize) < self.state.sounds.len() {
             self.state.sounds[slot as usize] = SoundSlot::default();
         }
+    }
+
+    /// Called when the engine finishes a recording. Finds the slot that owns
+    /// `sample_id`, updates its metadata, and writes the WAV into
+    /// `<project_dir>/.pocketty/recordings/`.
+    pub fn on_recording_complete(
+        &mut self,
+        sample_id: SampleId,
+        buffer: &SampleBuffer,
+        project_dir: &Path,
+    ) -> anyhow::Result<std::path::PathBuf> {
+        let slot_idx = self.state.sounds.iter()
+            .position(|s| s.sample_id == Some(sample_id))
+            .ok_or_else(|| anyhow::anyhow!("no slot found for recorded sample_id"))?;
+
+        let rec_dir = project_dir.join(".pocketty").join("recordings");
+        std::fs::create_dir_all(&rec_dir)?;
+        let filename = format!("rec_{:02}.wav", slot_idx);
+        let wav_path = rec_dir.join(&filename);
+
+        const SAMPLE_RATE: u32 = 44100;
+        buffer.save_wav(&wav_path, SAMPLE_RATE)?;
+
+        let sound = &mut self.state.sounds[slot_idx];
+        sound.sample_path = wav_path.to_string_lossy().into_owned();
+        sound.buffer_len = buffer.data.len();
+        sound.trim_start = 0;
+        sound.length = buffer.data.len();
+
+        Ok(wav_path)
     }
 
     fn pad_to_major_scale_pitch(pad_index: u8) -> f32 {
