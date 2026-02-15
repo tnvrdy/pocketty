@@ -1,3 +1,4 @@
+![IMG_0021](https://github.com/user-attachments/assets/a44cba24-4b24-4716-907e-f40b642aeea4)
 # pocketty - produce music in your terminal
 ### we built teenage engineer's pocket operator as a tui
 
@@ -32,4 +33,5 @@ audio backend built from scratch with cpal (rust audio library), interface built
 - a manual for keybinds and capabilities, especially for those not yet experienced in music production
 - cute ascii animation generation for your songs
 
+art banner made by tanvi :3 source of the dot art on the lcd
 template from devpost
