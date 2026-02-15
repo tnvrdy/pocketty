@@ -88,6 +88,12 @@ pub enum InputEvent {
     // clear current sound's track in current pattern (0 key)
     ClearTrack,
 
+    // cycle input device (mic ↔ loopback etc.)
+    CycleInputDevice,
+
+    // bounce current pattern to WAV
+    BouncePattern,
+
     // quit button (esc)
     Quit,
 
@@ -143,6 +149,7 @@ pub struct DisplayState {
     pub knob_b_label: &'static str, // "GAIN", "RESO", "LENGTH"
     pub knob_a_value: f32,
     pub knob_b_value: f32,
+    pub input_device: String, // current input device name (for display)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

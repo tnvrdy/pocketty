@@ -114,6 +114,9 @@ fn draw_screen(frame: &mut Frame, area: Rect, state: &DisplayState) {
         state.knob_a_label, state.knob_a_value,
         state.knob_b_label, state.knob_b_value,
     );
+    // Truncate device name for LCD width
+    let dev_name: String = state.input_device.chars().take(iw.saturating_sub(6)).collect();
+    let l3 = format!(" IN: {}", dev_name);
     // let l3 = format!(
     //     " snd:{:<2} pat:{:<2}",
     //     state.selected_sound + 1, state.selected_pattern + 1,
@@ -129,6 +132,7 @@ fn draw_screen(frame: &mut Frame, area: Rect, state: &DisplayState) {
         Line::from(Span::styled(top, sb)),
         Line::from(Span::styled(pad_str(&l1), sh)),
         Line::from(Span::styled(pad_str(&l2), sl)),
+        Line::from(Span::styled(pad_str(&l3), sl)),
     ];
 
     let used = lines.len() + 1; // +1 for bottom border
@@ -349,8 +353,10 @@ fn draw_footer(frame: &mut Frame, area: Rect) {
         Span::styled("quit ", Style::default().fg(MID)),
         Span::styled("(0)", Style::default().fg(DIM)),
         Span::styled("clr ", Style::default().fg(MID)),
-        Span::styled("(y)", Style::default().fg(DIM)),
-        Span::styled("pg", Style::default().fg(MID)),
+        Span::styled("(i)", Style::default().fg(DIM)),
+        Span::styled("in ", Style::default().fg(MID)),
+        Span::styled("(p)", Style::default().fg(DIM)),
+        Span::styled("wav", Style::default().fg(MID)),
     ]);
 
     frame.render_widget(

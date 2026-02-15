@@ -25,6 +25,7 @@ pub struct Middle {
     active_rt_effect: Option<u8>, // active real-time effect while fx held
     recording_armed: bool, // true between RecordDown and RecordUp
     is_capturing: bool,    // true when engine is actively capturing audio (set from main loop)
+    input_device_name: String, // current input device name
     display: DisplayState,
 }
 
@@ -43,6 +44,7 @@ impl Middle {
             active_rt_effect: None,
             recording_armed: false,
             is_capturing: false,
+            input_device_name: String::from("default"),
             display: Self::empty_display(),
         }
     }
@@ -56,6 +58,11 @@ impl Middle {
     /// Called from the main loop to update recording capture state from the engine.
     pub fn set_capturing(&mut self, capturing: bool) {
         self.is_capturing = capturing;
+    }
+
+    /// Called from the main loop when the input device is switched.
+    pub fn set_input_device_name(&mut self, name: String) {
+        self.input_device_name = name;
     }
 
     pub fn handle_input(&mut self, event: InputEvent) -> Vec<AudioCommand> {
@@ -345,8 +352,65 @@ impl Middle {
                 vec![]
             }
 
+            // Handled in main loop (needs AudioHandle), not here
+            InputEvent::CycleInputDevice => vec![],
+            InputEvent::BouncePattern => vec![],
+
             InputEvent::Quit => vec![],
         }
+    }
+
+    /// Generate the AudioCommands for each of the 16 steps of the current pattern.
+    /// Used for offline bounce rendering.
+    pub fn generate_pattern_commands(&self) -> Vec<Vec<AudioCommand>> {
+        let pi = self.state.selected_pattern as usize;
+        let pattern = &self.state.patterns[pi];
+
+        (0..STEPS_PER_PATTERN).map(|step_idx| {
+            let mut cmds = Vec::new();
+            for (sound_idx, track) in pattern.tracks.iter().enumerate() {
+                let step = &track.steps[step_idx];
+                if !step.active { continue; }
+
+                let sound = &self.state.sounds[sound_idx];
+                let Some(sample_id) = sound.sample_id else { continue; };
+
+                let gain = step.gain_lock.unwrap_or(sound.gain)
+                    * (self.state.master_volume as f32 / 16.0);
+                let mut pitch = step.pitch_lock.unwrap_or(sound.pitch);
+
+                let fx = step.effect;
+                let (reverse, stutter_period_samples, pitch_mult, is_unison, unison_detune) =
+                    Self::derive_trigger_mods_from_fx(self.state.bpm, fx);
+                pitch *= pitch_mult;
+
+                cmds.push(AudioCommand::Trigger(TriggerParams {
+                    sample_id,
+                    trim_start: sound.trim_start,
+                    length: sound.length,
+                    gain,
+                    pitch,
+                    effect_chain: vec![],
+                    reverse,
+                    stutter_period_samples,
+                }));
+
+                if is_unison {
+                    let detune_factor = 2.0_f32.powf(unison_detune / 1200.0);
+                    cmds.push(AudioCommand::Trigger(TriggerParams {
+                        sample_id,
+                        trim_start: sound.trim_start,
+                        length: sound.length,
+                        gain,
+                        pitch: pitch * detune_factor,
+                        effect_chain: vec![],
+                        reverse,
+                        stutter_period_samples,
+                    }));
+                }
+            }
+            cmds
+        }).collect()
     }
 
     pub fn tick(&mut self, elapsed: f64) -> Vec<AudioCommand> {
@@ -563,6 +627,7 @@ impl Middle {
             knob_b_label: b_label,
             knob_a_value: knob_a,
             knob_b_value: knob_b,
+            input_device: self.input_device_name.clone(),
         };
     }
 
@@ -582,6 +647,7 @@ impl Middle {
             knob_b_label: "GAIN",
             knob_a_value: 0.5,
             knob_b_value: 0.5,
+            input_device: String::from("default"),
         }
     }
 

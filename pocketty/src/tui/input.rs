@@ -65,6 +65,8 @@ fn handle_press(code: KeyCode, ts: &mut TuiState) -> Vec<InputEvent> {
         }
 
         KeyCode::Char('0') => vec![InputEvent::ClearTrack],
+        KeyCode::Char('i') => vec![InputEvent::CycleInputDevice],
+        KeyCode::Char('p') => vec![InputEvent::BouncePattern],
 
         // knobs (also handled in handle_repeat for auto-repeat)
         KeyCode::Char('[') => resolve_knob_a(-0.05, ts),

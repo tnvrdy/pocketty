@@ -34,7 +34,7 @@ fn run() -> anyhow::Result<()> {
         )
     );
     let _guard = RawModeGuard; // auto drops when out of scope
-    let audio = audio::start_audio()?;
+    let mut audio = audio::start_audio()?;
     let project_dir: PathBuf = std::env::args()
         .nth(1)
         .map(PathBuf::from)
@@ -46,6 +46,7 @@ fn run() -> anyhow::Result<()> {
         .map(|s| s.sample_path.clone())
         .collect();
     let mut middle = Middle::with_state(state);
+    middle.set_input_device_name(audio.current_input_name());
 
     const SAMPLE_RATE: u32 = 44100;
     let wav_paths = loader::sample_loader::index_wav_in_dir(&project_dir)
@@ -106,6 +107,26 @@ fn run() -> anyhow::Result<()> {
                 drop(term);
                 drop(audio);
                 return Ok(());
+            }
+            if event == InputEvent::CycleInputDevice {
+                let name = audio.cycle_input_device();
+                middle.set_input_device_name(name);
+                continue;
+            }
+            if event == InputEvent::BouncePattern {
+                let sr = audio.sample_rate();
+                let secs_per_step = 60.0 / (middle.state.bpm as f64 * 4.0);
+                let frames_per_step = (secs_per_step * sr as f64) as usize;
+                let step_cmds = middle.generate_pattern_commands();
+                let buffer = audio::bounce_offline(
+                    audio.samples(), &step_cmds, frames_per_step,
+                );
+                let bounce_dir = project_dir.join(".pocketty");
+                let _ = std::fs::create_dir_all(&bounce_dir);
+                let pat = middle.state.selected_pattern + 1;
+                let path = bounce_dir.join(format!("bounce_pat{}.wav", pat));
+                let _ = buffer.save_wav(&path, sr);
+                continue;
             }
             let cmds = middle.handle_input(event);
             for cmd in cmds {
