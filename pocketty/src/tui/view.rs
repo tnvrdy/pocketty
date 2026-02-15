@@ -26,6 +26,18 @@ const PAD_LABELS: [&str; 16] = [
 const DEVICE_W: u16 = 40;
 const DEVICE_H: u16 = 41;
 
+const LCD_ART: &str = r#"
+⠀⠀⣰⡿⠿⠿⢿⠆⠀⣴⡄⢀⣀⠀⠀⢀⣄⣀⠀⠀⠀⠀⠀⣀⡀⠀⠀⡊⠲⠉⢱⠀⠀⠀⢠⣤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⢀⣿⣇⠀⠂⣌⠆⠀⠹⣿⠿⠛⠁⢹⠋⢉⡉⢳⣦⠀⠀⠀⢿⡿⠀⠀⠈⢀⣖⠁⠀⠀⠀⠈⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠈⠛⡻⢠⡴⠋⠢⡀⠀⠀⠀⠐⠯⣛⠀⠂⠀⢀⠄⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⡐⣹⣦⡟⡔⡑⠁⠀⠶⢠⠂⡄⠹⢞⠀⡔⠋⠀⠀⠀⠀⠀⠀⣀⣴⣿⣿⣿⣿⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⢱⣦⣛⠴⠂⠀⠠⠘⠒⠋⢰⢷⣲⠉⡉⠉⡆⠀⠀⠀⢴⡶⠀⠉⠉⢁⣼⣿⣯⠉⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⢨⣿⣿⣄⠀⠀⠀⠉⣍⣈⣉⠒⡚⠒⠰⠁⡇⠀⠀⠀⠀⠀⢀⣠⣴⣾⣿⣿⣿⣿⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⣿⡿⣿⠿⠦⠀⠀⠀⠀⠀⠀⠀⠘⣁⣁⡤⢷⠀⠀⣶⠄⠀⠀⠀⣉⣽⣿⣿⣿⣍⠙⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠈⠁⠂⢱⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⠀⢀⣆⣞⣲⠒⡄⠀⠐⠶⢿⣿⣿⣿⣿⣿⣿⣷⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⢧⣾⡶⠀⠀⠀⠀⠀⠀⠀⠀⠸⠤⢀⡀⣀⢸⣉⠇⠀⠀⠀⠀⠀⠈⡍⠈⠈⡇⠁⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"#;
+
 pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: bool) {
     // Center device in terminal
     let h = Layout::default()
@@ -59,10 +71,10 @@ pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: boo
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(2),  // gap between top border and LCD (reduced for more screen height)
+            Constraint::Length(2),  // title
             Constraint::Length(14), // LCD screen (art + text)
             Constraint::Length(5),  // controls: buttons + knobs
-            Constraint::Length(1),  // spacer (gap before grid)
+            Constraint::Length(1),  // spacer
             Constraint::Length(16), // pad grid: 4 rows × 4 lines each
             Constraint::Length(1),  // footer
         ])
@@ -87,36 +99,22 @@ fn draw_title_gap(frame: &mut Frame, area: Rect) {
     );
 }
 
-const LCD_ART: &str = r#"
-⠀⠀⣰⡿⠿⠿⢿⠆⠀⣴⡄⢀⣀⠀⠀⢀⣄⣀⠀⠀⠀⠀⠀⣀⡀⠀⠀⡊⠲⠉⢱⠀⠀⠀⢠⣤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⢀⣿⣇⠀⠂⣌⠆⠀⠹⣿⠿⠛⠁⢹⠋⢉⡉⢳⣦⠀⠀⠀⢿⡿⠀⠀⠈⢀⣖⠁⠀⠀⠀⠈⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠈⠛⡻⢠⡴⠋⠢⡀⠀⠀⠀⠐⠯⣛⠀⠂⠀⢀⠄⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⡐⣹⣦⡟⡔⡑⠁⠀⠶⢠⠂⡄⠹⢞⠀⡔⠋⠀⠀⠀⠀⠀⠀⣀⣴⣿⣿⣿⣿⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⢱⣦⣛⠴⠂⠀⠠⠘⠒⠋⢰⢷⣲⠉⡉⠉⡆⠀⠀⠀⢴⡶⠀⠉⠉⢁⣼⣿⣯⠉⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⢨⣿⣿⣄⠀⠀⠀⠉⣍⣈⣉⠒⡚⠒⠰⠁⡇⠀⠀⠀⠀⠀⢀⣠⣴⣾⣿⣿⣿⣿⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⣿⡿⣿⠿⠦⠀⠀⠀⠀⠀⠀⠀⠘⣁⣁⡤⢷⠀⠀⣶⠄⠀⠀⠀⣉⣽⣿⣿⣿⣍⠙⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠈⠁⠂⢱⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⠀⢀⣆⣞⣲⠒⡄⠀⠐⠶⢿⣿⣿⣿⣿⣿⣿⣷⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⢧⣾⡶⠀⠀⠀⠀⠀⠀⠀⠀⠸⠤⢀⡀⣀⢸⣉⠇⠀⠀⠀⠀⠀⠈⡍⠈⠈⡇⠁⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"#;
-
-fn draw_screen(frame: &mut Frame, area: Rect, _state: &DisplayState) {
+fn draw_screen(frame: &mut Frame, area: Rect, state: &DisplayState) {
     let h = area.height as usize;
     let w = area.width as usize;
-    let style = Style::default().fg(LCD_FG);
-    let border_style = Style::default().fg(MID);
+    let iw = if w > 4 { w - 4 } else { 1 };
 
-    let content_h = h.saturating_sub(2);
-    let content_w = w.saturating_sub(2);
-    if content_h == 0 || content_w == 0 {
-        return;
-    }
+    let sb = Style::default().fg(MID);
+    let sl = Style::default().fg(LCD_FG);
+    let sh = Style::default().fg(LCD_BRIGHT);
+    let art_style = Style::default().fg(LCD_FG);
 
-    let art_lines: Vec<&str> = LCD_ART.trim().lines().collect();
-    let start = art_lines
-        .iter()
-        .position(|s| !s.chars().all(|c| c.is_whitespace()))
-        .unwrap_or(0);
-    let art_used: Vec<&str> = art_lines.get(start..).unwrap_or(&[]).to_vec();
+    let top_border = format!(" ╔{}╗", "═".repeat(iw));
+    let bot_border = format!(" ╚{}╝", "═".repeat(iw));
+
+    let play = if state.playing { "▶" } else { "■" };
+    let write = if state.write_mode { "●W" } else { "○W" };
+    let page = format!("{:?}", state.param_page);
 
     let l1 = format!(
         " {} {} {}  {:.0}bpm",
@@ -128,10 +126,8 @@ fn draw_screen(frame: &mut Frame, area: Rect, _state: &DisplayState) {
         state.knob_a_label, state.knob_a_value,
         state.knob_b_label, state.knob_b_value,
     );
-    // let l3 = format!(
-    //     " snd:{:<2} pat:{:<2}",
-    //     state.selected_sound + 1, state.selected_pattern + 1,
-    // );
+    let dev_name: String = state.input_device.chars().take(iw.saturating_sub(6)).collect();
+    let l3 = format!(" IN: {}", dev_name);
 
     let pad_str = |s: &str| -> String {
         let n = s.chars().count();
@@ -139,21 +135,29 @@ fn draw_screen(frame: &mut Frame, area: Rect, _state: &DisplayState) {
         format!(" ║{}{}║", s, " ".repeat(p))
     };
 
-    let mut lines = vec![
-        Line::from(Span::styled(top, sb)),
-        Line::from(Span::styled(pad_str(&l1), sh)),
-        Line::from(Span::styled(pad_str(&l2), sl)),
-    ];
+    // Build the LCD: border + art + text + border
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from(Span::styled(top_border, sb)));
 
-    let used = lines.len() + 1; // +1 for bottom border
-    for _ in 0..h.saturating_sub(used) {
-        lines.push(Line::from(Span::styled(empty_row.clone(), sb)));
+    // Art lines (trimmed to fit inside LCD border)
+    let art_lines: Vec<&str> = LCD_ART.trim().lines().collect();
+    let max_art = h.saturating_sub(5); // leave room for border(2) + text(3)
+    for art_line in art_lines.iter().take(max_art) {
+        // Truncate art to fit inside LCD width
+        let truncated: String = art_line.chars().take(iw).collect();
+        let pad = iw.saturating_sub(truncated.chars().count());
+        let padded = format!(" ║{}{}║", truncated, " ".repeat(pad));
+        lines.push(Line::from(Span::styled(padded, art_style)));
     }
 
-    lines.push(Line::from(Span::styled(bottom_border, border_style)));
+    // Text rows
+    lines.push(Line::from(Span::styled(pad_str(&l1), sh)));
+    lines.push(Line::from(Span::styled(pad_str(&l2), sl)));
+    lines.push(Line::from(Span::styled(pad_str(&l3), sl)));
 
-    let para = Paragraph::new(lines).scroll((0, 0));
-    frame.render_widget(para, area);
+    lines.push(Line::from(Span::styled(bot_border, sb)));
+
+    frame.render_widget(Paragraph::new(lines), area);
 }
 
 fn draw_controls_row(frame: &mut Frame, area: Rect, state: &DisplayState) {
@@ -175,7 +179,6 @@ fn draw_controls_row(frame: &mut Frame, area: Rect, state: &DisplayState) {
         .constraints([Constraint::Length(7); 5])
         .split(centered);
 
-
     let sh = state.display_text.starts_with("SND");
     let ph = state.display_text.starts_with("PAT");
     let bh = state.display_text.starts_with("VOL");
@@ -187,10 +190,9 @@ fn draw_controls_row(frame: &mut Frame, area: Rect, state: &DisplayState) {
     draw_knob(frame, cols[4], state.knob_b_label, "-/=", state.knob_b_value);
 }
 
-/// dot lights up red when the button is active.
 fn draw_btn(frame: &mut Frame, area: Rect, sym: &str, label: &str, key: &str, active: bool) {
     let c = if active { ACCENT } else { DIM };
-    let sc = if active { LED_RED } else { MID }; // dot red when lit
+    let sc = if active { LED_RED } else { MID };
     let lc = if active { ACCENT } else { TEXT };
 
     let lines = vec![
@@ -225,15 +227,15 @@ fn draw_knob(frame: &mut Frame, area: Rect, label: &str, keys: &str, value: f32)
 fn knob_art(value: f32) -> (&'static str, &'static str, &'static str) {
     let pos = ((value.clamp(0.0, 1.0) * 8.0) as usize) % 8;
     match pos {
-        0 => ("╭─·─╮", "│   │", "╰─·─╯"), // 12/6 o'clock
-        1 => ("╭──·╮", "│ ╲ │", "╰·──╯"), //  1:30 / 7:30
-        2 => ("╭───╮", "·───·", "╰───╯"), //  3/9 o'clock
-        3 => ("╭·──╮", "│ ╱ │", "╰──·╯"), //  4:30 / 10:30
-        4 => ("╭─·─╮", "│   │", "╰─·─╯"), //  6/12 o'clock
-        5 => ("╭──·╮", "│ ╲ │", "╰·──╯"), //  7:30 / 1:30
-        6 => ("╭───╮", "·───·", "╰───╯"), //  9/3 o'clock
-        7 => ("╭·──╮", "│ ╱ │", "╰──·╯"), // 10:30 / 4:30
-        _ => ("╭───╮", "│ ● │", "╰───╯"), // fallback
+        0 => ("╭─·─╮", "│   │", "╰─·─╯"),
+        1 => ("╭──·╮", "│ ╲ │", "╰·──╯"),
+        2 => ("╭───╮", "·───·", "╰───╯"),
+        3 => ("╭·──╮", "│ ╱ │", "╰──·╯"),
+        4 => ("╭─·─╮", "│   │", "╰─·─╯"),
+        5 => ("╭──·╮", "│ ╲ │", "╰·──╯"),
+        6 => ("╭───╮", "·───·", "╰───╯"),
+        7 => ("╭·──╮", "│ ╱ │", "╰──·╯"),
+        _ => ("╭───╮", "│ ● │", "╰───╯"),
     }
 }
 
@@ -338,7 +340,7 @@ fn draw_side_col(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: 
 
 fn draw_side_btn(frame: &mut Frame, area: Rect, sym: &str, label: &str, key: &str, active: bool) {
     let c = if active { ACCENT } else { DIM };
-    let sc = if active { LED_RED } else { MID }; // dot red when lit
+    let sc = if active { LED_RED } else { MID };
     let lc = if active { ACCENT } else { TEXT };
 
     let lines = vec![
