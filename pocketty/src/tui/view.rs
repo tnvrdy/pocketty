@@ -22,9 +22,9 @@ const PAD_LABELS: [&str; 16] = [
     "Z", "X", "C", "V",
 ];
 
-// terminal chars are ~2:1 so 40×36 chars ≈ 40×72 visual → 5:9 portrait
+// terminal chars are ~2:1 so 40×41 chars ≈ 40×82 visual
 const DEVICE_W: u16 = 40;
-const DEVICE_H: u16 = 36;
+const DEVICE_H: u16 = 41;
 
 pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: bool) {
     // Center device in terminal
@@ -59,12 +59,12 @@ pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: boo
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // gap between top border and LCD
-            Constraint::Min(6), // LCD screen
-            Constraint::Length(5), // controls: buttons + knobs
-            Constraint::Length(1), // spacer (gap before grid)
+            Constraint::Length(4),  // gap between top border and LCD
+            Constraint::Length(13), // LCD screen (art)
+            Constraint::Length(5),  // controls: buttons + knobs
+            Constraint::Length(1),  // spacer (gap before grid)
             Constraint::Length(16), // pad grid: 4 rows × 4 lines each
-            Constraint::Length(1), // footer
+            Constraint::Length(1),  // footer
         ])
         .split(inner);
 
@@ -87,65 +87,68 @@ fn draw_title_gap(frame: &mut Frame, area: Rect) {
     );
 }
 
-fn draw_screen(frame: &mut Frame, area: Rect, state: &DisplayState) {
+const LCD_ART: &str = r#"
+⠀⠀⣰⡿⠿⠿⢿⠆⠀⣴⡄⢀⣀⠀⠀⢀⣄⣀⠀⠀⠀⠀⠀⣀⡀⠀⠀⡊⠲⠉⢱⠀⠀⠀⢠⣤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⢀⣿⣇⠀⠂⣌⠆⠀⠹⣿⠿⠛⠁⢹⠋⢉⡉⢳⣦⠀⠀⠀⢿⡿⠀⠀⠈⢀⣖⠁⠀⠀⠀⠈⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠈⠛⡻⢠⡴⠋⠢⡀⠀⠀⠀⠐⠯⣛⠀⠂⠀⢀⠄⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⡐⣹⣦⡟⡔⡑⠁⠀⠶⢠⠂⡄⠹⢞⠀⡔⠋⠀⠀⠀⠀⠀⠀⣀⣴⣿⣿⣿⣿⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⢱⣦⣛⠴⠂⠀⠠⠘⠒⠋⢰⢷⣲⠉⡉⠉⡆⠀⠀⠀⢴⡶⠀⠉⠉⢁⣼⣿⣯⠉⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⢨⣿⣿⣄⠀⠀⠀⠉⣍⣈⣉⠒⡚⠒⠰⠁⡇⠀⠀⠀⠀⠀⢀⣠⣴⣾⣿⣿⣿⣿⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⣿⡿⣿⠿⠦⠀⠀⠀⠀⠀⠀⠀⠘⣁⣁⡤⢷⠀⠀⣶⠄⠀⠀⠀⣉⣽⣿⣿⣿⣍⠙⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠈⠁⠂⢱⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⠀⢀⣆⣞⣲⠒⡄⠀⠐⠶⢿⣿⣿⣿⣿⣿⣿⣷⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⢧⣾⡶⠀⠀⠀⠀⠀⠀⠀⠀⠸⠤⢀⡀⣀⢸⣉⠇⠀⠀⠀⠀⠀⠈⡍⠈⠈⡇⠁⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"#;
+
+fn draw_screen(frame: &mut Frame, area: Rect, _state: &DisplayState) {
     let h = area.height as usize;
     let w = area.width as usize;
-    let iw = if w > 4 { w - 4 } else { 1 };
+    let style = Style::default().fg(LCD_FG);
+    let border_style = Style::default().fg(MID);
 
-    let sb = Style::default().fg(MID);
-    let sl = Style::default().fg(LCD_FG);
-    let sh = Style::default().fg(LCD_BRIGHT);
-
-    let top = format!(" ╔{}╗", "═".repeat(iw));
-    let bot = format!(" ╚{}╝", "═".repeat(iw));
-    let empty_row = format!(" ║{}║", " ".repeat(iw));
-
-    let play = if state.playing { "▶" } else { "■" };
-    let write = if state.write_mode { "●W" } else { "○W" };
-    let page = format!("{:?}", state.param_page);
-
-    let l1 = format!(
-        " {} {} {}  {:.0}bpm",
-        state.display_text, play, write, state.bpm
-    );
-    let l2 = format!(
-        " {:<5} {}:{:.2} {}:{:.2}",
-        page,
-        state.knob_a_label, state.knob_a_value,
-        state.knob_b_label, state.knob_b_value,
-    );
-    // Truncate device name for LCD width
-    let dev_name: String = state.input_device.chars().take(iw.saturating_sub(6)).collect();
-    let l3 = format!(" IN: {}", dev_name);
-    // let l3 = format!(
-    //     " snd:{:<2} pat:{:<2}",
-    //     state.selected_sound + 1, state.selected_pattern + 1,
-    // );
-
-    let pad_str = |s: &str| -> String {
-        let n = s.chars().count();
-        let p = if iw > n { iw - n } else { 0 };
-        format!(" ║{}{}║", s, " ".repeat(p))
-    };
-
-    let mut lines = vec![
-        Line::from(Span::styled(top, sb)),
-        Line::from(Span::styled(pad_str(&l1), sh)),
-        Line::from(Span::styled(pad_str(&l2), sl)),
-        Line::from(Span::styled(pad_str(&l3), sl)),
-    ];
-
-    let used = lines.len() + 1; // +1 for bottom border
-    for _ in 0..h.saturating_sub(used) {
-        lines.push(Line::from(Span::styled(empty_row.clone(), sb)));
+    let content_h = h.saturating_sub(2);
+    let content_w = w.saturating_sub(2);
+    if content_h == 0 || content_w == 0 {
+        return;
     }
-    lines.push(Line::from(Span::styled(bot, sb)));
 
-    frame.render_widget(Paragraph::new(lines), area);
+    let art_lines: Vec<&str> = LCD_ART.trim().lines().collect();
+    let start = art_lines
+        .iter()
+        .position(|s| !s.chars().all(|c| c.is_whitespace()))
+        .unwrap_or(0);
+    let art_used: Vec<&str> = art_lines.get(start..).unwrap_or(&[]).to_vec();
+
+    let top_border = format!("╔{}╗", "═".repeat(content_w));
+    let bottom_border = format!("╚{}╝", "═".repeat(content_w));
+
+    let mut lines = vec![Line::from(Span::styled(top_border.clone(), border_style))];
+
+    for s in art_used.iter().take(content_h) {
+        let raw: String = s.chars().take(content_w).collect();
+        let pad_len = content_w.saturating_sub(raw.chars().count());
+        let row = format!("{}{}", raw, " ".repeat(pad_len));
+        lines.push(Line::from(vec![
+            Span::styled("║", border_style),
+            Span::styled(row, style),
+            Span::styled("║", border_style),
+        ]));
+    }
+
+    for _ in art_used.len().min(content_h)..content_h {
+        lines.push(Line::from(vec![
+            Span::styled("║", border_style),
+            Span::styled(" ".repeat(content_w), style),
+            Span::styled("║", border_style),
+        ]));
+    }
+
+    lines.push(Line::from(Span::styled(bottom_border, border_style)));
+
+    let para = Paragraph::new(lines).scroll((0, 0));
+    frame.render_widget(para, area);
 }
 
 fn draw_controls_row(frame: &mut Frame, area: Rect, state: &DisplayState) {
-    // Center the 5-column block horizontally (5×7 = 35 chars in inner width)
     let inner_w = area.width;
     let block_w = 35u16;
     let side = inner_w.saturating_sub(block_w) / 2;
