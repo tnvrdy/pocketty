@@ -49,10 +49,24 @@ impl Middle {
         }
     }
 
-    pub fn with_state(state: ProjectState) -> Self {
+    pub fn with_state(mut state: ProjectState) -> Self {
+        // Clear all per-step effects on load — stale effects (stutter, etc.)
+        // cause glitches if they survive across sessions
+        Self::clear_all_step_effects(&mut state);
         let mut m = Self::new();
         m.state = state;
         m
+    }
+
+    /// Wipe the `effect` field from every step in every pattern.
+    fn clear_all_step_effects(state: &mut ProjectState) {
+        for pattern in &mut state.patterns {
+            for track in &mut pattern.tracks {
+                for step in &mut track.steps {
+                    step.effect = None;
+                }
+            }
+        }
     }
 
     /// Called from the main loop to update recording capture state from the engine.
@@ -95,9 +109,11 @@ impl Middle {
                     self.current_step = (STEPS_PER_PATTERN as u8).wrapping_sub(1);
                     self.step_accumulator = 0.0;
                     self.chain_position = 0;
+                    self.active_rt_effect = None;
                     vec![]
                 } else {
-                    // Stopping: kill all playing voices immediately
+                    // Stopping: kill all playing voices and clear realtime effect
+                    self.active_rt_effect = None;
                     vec![AudioCommand::StopAllVoices]
                 }
             }
@@ -220,11 +236,11 @@ impl Middle {
             }
             InputEvent::ClearRealtimeEffect => {
                 self.active_rt_effect = None;
-                if self.write_mode {
-                    let pi = self.state.selected_pattern as usize;
-                    let si = self.current_step as usize;
-                    for track in &mut self.state.patterns[pi].tracks {
-                        track.steps[si].effect = None;
+                // Always clear ALL saved per-step effects in the current pattern
+                let pi = self.state.selected_pattern as usize;
+                for track in &mut self.state.patterns[pi].tracks {
+                    for step in &mut track.steps {
+                        step.effect = None;
                     }
                 }
                 // Kill lingering stutter/loop voices immediately
