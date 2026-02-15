@@ -1,4 +1,7 @@
 # pocketty - produce music in your terminal
+### we built teenage engineer's pocket operator as a tui
+
+https://github.com/user-attachments/assets/0721553c-cc8c-4d3a-8a0d-319ec5c16ce1
 
 ## inspiration
 we love music production and good design, teenage engineering does these two best. TE's Pocket Operator is pretty tiny but allows basically anyone to produce music worth listening to. intentionally, given its size, the device itself is constrained in terms of power, memory, production event space, and preservation of your work. we thought having this music production system on your computer, while still keeping it ~quaint~, would be useful and fun. and tuis are cute! voila, a pocket operator tui named pocke*tty*.
