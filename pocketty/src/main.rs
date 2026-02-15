@@ -33,6 +33,10 @@ fn run() -> anyhow::Result<()> {
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
     let state = persistence::load_project(&project_dir)
         .unwrap_or_default();
+    // remember previously recorded samples
+    let saved_paths: Vec<String> = state.sounds.iter()
+        .map(|s| s.sample_path.clone())
+        .collect();
     let mut middle = Middle::with_state(state);
 
     const SAMPLE_RATE: u32 = 44100;
@@ -40,13 +44,26 @@ fn run() -> anyhow::Result<()> {
         .unwrap_or_default();
     let num_loaded = wav_paths.len().min(shared::NUM_SOUNDS); // always refresh from disk
     for (slot, path) in wav_paths.into_iter().take(shared::NUM_SOUNDS).enumerate() {
-        match middle.load_sample_into_slot(slot as u8, &path, SAMPLE_RATE) {
-            Ok(cmd) => audio.send(cmd),
-            Err(e) => eprintln!("Warning: could not load slot {} ({}): {}", slot, path.display(), e),
+        if let Ok(cmd) = middle.load_sample_into_slot(slot as u8, &path, SAMPLE_RATE) {
+            audio.send(cmd);
         }
     }
     for slot in num_loaded..shared::NUM_SOUNDS { // clear any samples removed from disk
         middle.clear_slot(slot as u8);
+    }
+
+    for slot in 0..shared::NUM_SOUNDS {
+        let sample_path = &saved_paths[slot];
+        if sample_path.is_empty() {
+            continue;
+        }
+        let path = std::path::Path::new(sample_path);
+        let already_loaded = middle.state.sounds[slot].sample_id.is_some();
+        if !already_loaded && path.exists() {
+            if let Ok(cmd) = middle.load_sample_into_slot(slot as u8, path, SAMPLE_RATE) {
+                audio.send(cmd);
+            }
+        }
     }
 
     let backend = CrosstermBackend::new(std::io::stdout());
@@ -75,9 +92,7 @@ fn run() -> anyhow::Result<()> {
         for event in events {
             if event == InputEvent::Quit {
                 // save before quitting
-                if let Err(e) = persistence::save_project(&project_dir, &middle.state) {
-                    eprintln!("Warning: could not save project: {}", e);
-                }
+                let _ = persistence::save_project(&project_dir, &middle.state);
                 drop(term);
                 drop(audio);
                 return Ok(());
@@ -86,6 +101,11 @@ fn run() -> anyhow::Result<()> {
             for cmd in cmds {
                 audio.send(cmd);
             }
+        }
+
+        // Check if a recording just finished; save the WAV to the project dir
+        if let Some(rec) = audio.poll_completed_recording() {
+            let _ = middle.on_recording_complete(rec.sample_id, &rec.buffer, &project_dir);
         }
 
         let elapsed = last_tick.elapsed().as_secs_f64();
