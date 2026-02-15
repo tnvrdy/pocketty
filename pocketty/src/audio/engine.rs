@@ -149,6 +149,11 @@ impl Engine {
                     active.voice.set_pos(position);
                 }
             }
+            AudioCommand::StopAllVoices => {
+                for active in &mut self.active {
+                    active.voice.active = false;
+                }
+            }
             AudioCommand::StartRecording { sample_id } => {
                 self.recording = RecordingState::Armed {
                     sample_id,

@@ -16,6 +16,7 @@ pub struct Voice {
     trim_start: usize,
     length: usize,
     stutter_period: Option<u32>,
+    frames_rendered: usize, // total output frames rendered (bounds stutter lifetime)
 }
 
 impl Voice {
@@ -41,6 +42,7 @@ impl Voice {
             trim_start,
             length,
             stutter_period,
+            frames_rendered: 0,
         }
     }
 
@@ -74,7 +76,11 @@ impl Voice {
                 break;
             }
 
-            // for stuttering
+            // stutter blows up without this
+            if self.frames_rendered >= self.length {
+                self.active = false;
+                break;
+            }
             if self.stutter_period.is_none() {
                 if self.reverse && self.pos < 0.0 {
                     self.active = false;
@@ -128,6 +134,8 @@ impl Voice {
                     }
                 }
             }
+
+            self.frames_rendered += 1;
         }
     }
 }

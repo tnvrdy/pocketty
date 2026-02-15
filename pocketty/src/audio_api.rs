@@ -27,4 +27,7 @@ pub enum AudioCommand {
 
     // Scatch effects
     SetPlaybackPosition { sample_id: SampleId, position: f32 },
+
+    // Kill all playing voices immediately (used when stopping playback)
+    StopAllVoices,
 }
