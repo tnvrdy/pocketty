@@ -36,11 +36,15 @@ fn run() -> anyhow::Result<()> {
     const SAMPLE_RATE: u32 = 44100;
     let wav_paths = loader::sample_loader::index_wav_in_dir(&project_dir)
         .unwrap_or_default();
+    let num_loaded = wav_paths.len().min(shared::NUM_SOUNDS); // always refresh from disk
     for (slot, path) in wav_paths.into_iter().take(shared::NUM_SOUNDS).enumerate() {
         match middle.load_sample_into_slot(slot as u8, &path, SAMPLE_RATE) {
             Ok(cmd) => audio.send(cmd),
             Err(e) => eprintln!("Warning: could not load slot {} ({}): {}", slot, path.display(), e),
         }
+    }
+    for slot in num_loaded..shared::NUM_SOUNDS { // clear any samples removed from disk
+        middle.clear_slot(slot as u8);
     }
 
     let tick_rate = std::time::Duration::from_millis(16);
@@ -80,6 +84,7 @@ fn run() -> anyhow::Result<()> {
             if let Event::Key(key) = crossterm::event::read()? {
                 if key.kind == KeyEventKind::Press {
                     let event = match key.code {
+                        // Right now you have to manually press Shift+<button> to release it. probably won't want this in the final version.
                         KeyCode::Esc => Some(InputEvent::Quit),
                         KeyCode::Char(' ') => Some(InputEvent::PlayPress),
                         KeyCode::Char('1') => Some(InputEvent::GridDown(0)),
