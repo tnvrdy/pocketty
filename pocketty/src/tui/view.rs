@@ -2,7 +2,7 @@ use crate::shared::{DisplayState, LedState};
 use ratatui::layout::{Alignment, Layout, Direction, Constraint, Rect};
 use ratatui::style::{Color, Style, Modifier};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Block, Borders, BorderType, Paragraph};
 use ratatui::Frame;
 
 const DIM: Color = Color::Rgb(60, 60, 60);
@@ -11,9 +11,9 @@ const TEXT: Color = Color::Rgb(200, 200, 180);
 const ACCENT: Color = Color::Rgb(255, 200, 80);
 const LED_MED: Color = Color::Rgb(180, 140, 50);
 const LED_HI: Color = Color::Rgb(255, 220, 80);
-const LCD_BG: Color = Color::Rgb(30, 35, 25);
 const LCD_FG: Color = Color::Rgb(140, 180, 100);
 const LCD_BRIGHT: Color = Color::Rgb(190, 230, 130);
+const LED_RED: Color = Color::Rgb(220, 60, 50); // dot lights up when button is active
 
 const PAD_LABELS: [&str; 16] = [
     "1", "2", "3", "4",
@@ -22,10 +22,13 @@ const PAD_LABELS: [&str; 16] = [
     "Z", "X", "C", "V",
 ];
 
-const DEVICE_W: u16 = 46;
+// terminal chars are ~2:1 so 40×36 chars ≈ 40×72 visual → 5:9 portrait
+const DEVICE_W: u16 = 40;
+const DEVICE_H: u16 = 36;
 
 pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: bool) {
-    let h_center = Layout::default() // horizontal center
+    // Center device in terminal
+    let h = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
             Constraint::Min(0),
@@ -33,217 +36,240 @@ pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: boo
             Constraint::Min(0),
         ])
         .split(area);
-    let device = h_center[1];
 
+    let v = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(DEVICE_H),
+            Constraint::Min(0),
+        ])
+        .split(h[1]);
+
+    let device_area = v[1];
+
+    // Outer device border — title on top border line
+    let border = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(MID))
+        .title(Span::styled(
+            " pocketty ─ PO-33 ",
+            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+        ));
+
+    let inner = border.inner(device_area);
+    frame.render_widget(border, device_area);
+
+    // Vertical sections — gap, LCD, controls, spacer, grid, footer
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(6),  // lcd screen
-            Constraint::Length(3),  // mode buttons (sound, pattern, bpm)
-            Constraint::Length(2),  // knob indicators
-            Constraint::Min(14),   // pad grid + side buttons
-            Constraint::Length(1),  // footer
+            Constraint::Length(3), // gap between top border and LCD
+            Constraint::Min(6), // LCD screen
+            Constraint::Length(5), // controls: buttons + knobs
+            Constraint::Length(1), // spacer (gap before grid)
+            Constraint::Length(16), // pad grid: 4 rows × 4 lines each
+            Constraint::Length(1), // footer
         ])
-        .split(device);
+        .split(inner);
 
-    draw_screen(frame, rows[0], state);
-    draw_mode_row(frame, rows[1], state);
-    draw_knob_row(frame, rows[2], state);
-    draw_pad_grid(frame, rows[3], state, blink_on);
-    draw_footer(frame, rows[4]);
+    draw_screen(frame, rows[1], state);
+    draw_controls_row(frame, rows[2], state);
+    // rows[3] = spacer — intentionally blank
+    draw_pad_area(frame, rows[4], state, blink_on);
+    draw_footer(frame, rows[5]);
 }
 
 fn draw_screen(frame: &mut Frame, area: Rect, state: &DisplayState) {
+    let h = area.height as usize;
     let w = area.width as usize;
-    let inner = if w > 4 { w - 4 } else { w };
+    let iw = if w > 4 { w - 4 } else { 1 };
 
-    let border = Style::default().fg(MID);
-    let lcd = Style::default().fg(LCD_FG);
-    let lcd_b = Style::default().fg(LCD_BRIGHT);
+    let sb = Style::default().fg(MID);
+    let sl = Style::default().fg(LCD_FG);
+    let sh = Style::default().fg(LCD_BRIGHT);
 
-    let top = format!(" ╔{}╗", "═".repeat(inner));
-    let bot = format!(" ╚{}╝", "═".repeat(inner));
+    let top = format!(" ╔{}╗", "═".repeat(iw));
+    let bot = format!(" ╚{}╝", "═".repeat(iw));
+    let empty_row = format!(" ║{}║", " ".repeat(iw));
 
-    let play_icon = if state.playing { "▶" } else { "■" };
-    let write_icon = if state.write_mode { "●W" } else { "○W" };
-    let line1_content = format!(
-        " {:<12} snd:{:<2} pat:{:<2}",
-        state.display_text,
-        state.selected_sound + 1,
-        state.selected_pattern + 1,
+    let play = if state.playing { "▶" } else { "■" };
+    let write = if state.write_mode { "●W" } else { "○W" };
+    let page = format!("{:?}", state.param_page);
+
+    let l1 = format!(
+        " {} {} {}  {:.0}bpm",
+        state.display_text, play, write, state.bpm
     );
-
-    let page_name = format!("{:?}", state.param_page);
-    let line2_content = format!(
-        " {:<6} {}:{:.2}  {}:{:.2}",
-        page_name,
+    let l2 = format!(
+        " {:<5} {}:{:.2} {}:{:.2}",
+        page,
         state.knob_a_label, state.knob_a_value,
         state.knob_b_label, state.knob_b_value,
     );
+    // let l3 = format!(
+    //     " snd:{:<2} pat:{:<2}",
+    //     state.selected_sound + 1, state.selected_pattern + 1,
+    // );
 
-    let line3_content = format!(
-        " {} PLAY   {} WRITE   {:.0} BPM",
-        play_icon, write_icon, state.bpm
-    );
-
-    let pad_line = |content: &str| -> String {
-        let visible = content.chars().count();
-        let padding = if inner > visible { inner - visible } else { 0 };
-        format!(" ║{}{}║", content, " ".repeat(padding))
+    let pad_str = |s: &str| -> String {
+        let n = s.chars().count();
+        let p = if iw > n { iw - n } else { 0 };
+        format!(" ║{}{}║", s, " ".repeat(p))
     };
 
-    let lines = vec![
-        Line::from(Span::styled(top, border)),
-        Line::from(vec![
-            Span::styled(pad_line(&line1_content), border),
-        ]),
-        Line::from(vec![
-            Span::styled(pad_line(&line2_content), lcd),
-        ]),
-        Line::from(vec![
-            Span::styled(pad_line(&line3_content), lcd_b),
-        ]),
-        Line::from(Span::styled(bot, border)),
+    let mut lines = vec![
+        Line::from(Span::styled(top, sb)),
+        Line::from(Span::styled(pad_str(&l1), sh)),
+        Line::from(Span::styled(pad_str(&l2), sl)),
     ];
 
-    frame.render_widget(Paragraph::new(lines), area);
-}
-
-fn draw_mode_row(frame: &mut Frame, area: Rect, state: &DisplayState) {
-    let cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Ratio(1, 3),
-            Constraint::Ratio(1, 3),
-            Constraint::Ratio(1, 3),
-        ])
-        .split(area);
-
-    // infer held state from display_text prefix
-    let sound_held = state.display_text.starts_with("SND");
-    let pattern_held = state.display_text.starts_with("PAT");
-    let bpm_held = state.display_text.starts_with("VOL");
-
-    draw_mode_button(frame, cols[0], "sound", "g", sound_held);
-    draw_mode_button(frame, cols[1], "pattern", "h", pattern_held);
-    draw_mode_button(frame, cols[2], "bpm", "n", bpm_held);
-}
-
-fn draw_mode_button(frame: &mut Frame, area: Rect, label: &str, key: &str, held: bool) {
-    let sym = if held { "◉" } else { "●" };
-    let sym_color = if held { ACCENT } else { MID };
-    let lbl_color = if held { ACCENT } else { TEXT };
-
-    let lines = vec![
-        Line::from(vec![
-            Span::styled("  (", Style::default().fg(DIM)),
-            Span::styled(sym, Style::default().fg(sym_color)),
-            Span::styled(") ", Style::default().fg(DIM)),
-            Span::styled(label, Style::default().fg(lbl_color)),
-        ]),
-        Line::from(vec![
-            Span::styled(format!("   ({})", key), Style::default().fg(DIM)),
-        ]),
-    ];
-
-    frame.render_widget(Paragraph::new(lines), area);
-}
-
-fn draw_knob_row(frame: &mut Frame, area: Rect, state: &DisplayState) {
-    let cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Ratio(1, 2),
-            Constraint::Ratio(1, 2),
-        ])
-        .split(area);
-
-    draw_knob_inline(frame, cols[0], "A", state.knob_a_label, "[ / ]");
-    draw_knob_inline(frame, cols[1], "B", state.knob_b_label, "- / =");
-}
-
-fn draw_knob_inline(frame: &mut Frame, area: Rect, id: &str, label: &str, keys: &str) {
-    let lines = vec![
-        Line::from(vec![
-            Span::styled("  [", Style::default().fg(DIM)),
-            Span::styled("◉", Style::default().fg(TEXT)),
-            Span::styled("] ", Style::default().fg(DIM)),
-            Span::styled(id, Style::default().fg(ACCENT)),
-            Span::styled(" ", Style::default()),
-            Span::styled(label, Style::default().fg(TEXT)),
-            Span::styled("  ", Style::default()),
-            Span::styled(keys, Style::default().fg(DIM)),
-        ]),
-    ];
-
-    frame.render_widget(Paragraph::new(lines), area);
-}
-
-fn draw_pad_grid(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: bool) {
-    let cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Ratio(1, 5), // pad col 0
-            Constraint::Ratio(1, 5), // pad col 1
-            Constraint::Ratio(1, 5), // pad col 2
-            Constraint::Ratio(1, 5), // pad col 3
-            Constraint::Ratio(1, 5), // side buttons
-        ])
-        .split(area);
-
-    for col in 0..4 {
-        draw_pad_column(frame, cols[col], col, state, blink_on);
+    let used = lines.len() + 1; // +1 for bottom border
+    for _ in 0..h.saturating_sub(used) {
+        lines.push(Line::from(Span::styled(empty_row.clone(), sb)));
     }
+    lines.push(Line::from(Span::styled(bot, sb)));
 
-    draw_side_buttons(frame, cols[4], state);
+    frame.render_widget(Paragraph::new(lines), area);
 }
 
-fn draw_pad_column(frame: &mut Frame, area: Rect, col: usize, state: &DisplayState, blink_on: bool) {
+fn draw_controls_row(frame: &mut Frame, area: Rect, state: &DisplayState) {
+    // Center the 5-column block horizontally (5×7 = 35 chars in inner width)
+    let inner_w = area.width;
+    let block_w = 35u16;
+    let side = inner_w.saturating_sub(block_w) / 2;
+    let h = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(side),
+            Constraint::Length(block_w),
+            Constraint::Min(0),
+        ])
+        .split(area);
+    let centered = h[1];
+
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Length(7); 5])
+        .split(centered);
+
+
+    let sh = state.display_text.starts_with("SND");
+    let ph = state.display_text.starts_with("PAT");
+    let bh = state.display_text.starts_with("VOL");
+
+    draw_btn(frame, cols[0], "●", "sound", "g", sh);
+    draw_btn(frame, cols[1], "●", "pattn", "h", ph);
+    draw_btn(frame, cols[2], "●", "bpm", "n", bh);
+    draw_knob(frame, cols[3], state.knob_a_label, "[/]", state.knob_a_value);
+    draw_knob(frame, cols[4], state.knob_b_label, "-/=", state.knob_b_value);
+}
+
+/// dot lights up red when the button is active.
+fn draw_btn(frame: &mut Frame, area: Rect, sym: &str, label: &str, key: &str, active: bool) {
+    let c = if active { ACCENT } else { DIM };
+    let sc = if active { LED_RED } else { MID }; // dot red when lit
+    let lc = if active { ACCENT } else { TEXT };
+
+    let lines = vec![
+        Line::from(Span::styled(".:::.", Style::default().fg(c))),
+        Line::from(vec![
+            Span::styled(": ", Style::default().fg(c)),
+            Span::styled(sym, Style::default().fg(sc)),
+            Span::styled(" :", Style::default().fg(c)),
+        ]),
+        Line::from(Span::styled("':::'", Style::default().fg(c))),
+        Line::from(Span::styled(label, Style::default().fg(lc))),
+        Line::from(Span::styled(format!("({})", key), Style::default().fg(DIM))),
+    ];
+
+    frame.render_widget(Paragraph::new(lines).alignment(Alignment::Center), area);
+}
+
+fn draw_knob(frame: &mut Frame, area: Rect, label: &str, keys: &str, value: f32) {
+    let (top, mid, bot) = knob_art(value);
+
+    let lines = vec![
+        Line::from(Span::styled(top, Style::default().fg(TEXT))),
+        Line::from(Span::styled(mid, Style::default().fg(ACCENT))),
+        Line::from(Span::styled(bot, Style::default().fg(TEXT))),
+        Line::from(Span::styled(label, Style::default().fg(TEXT))),
+        Line::from(Span::styled(format!("({})", keys), Style::default().fg(DIM))),
+    ];
+
+    frame.render_widget(Paragraph::new(lines).alignment(Alignment::Center), area);
+}
+
+fn knob_art(value: f32) -> (&'static str, &'static str, &'static str) {
+    let pos = ((value.clamp(0.0, 1.0) * 8.0) as usize) % 8;
+    match pos {
+        0 => ("╭─·─╮", "│   │", "╰─·─╯"), // 12/6 o'clock
+        1 => ("╭──·╮", "│ ╲ │", "╰·──╯"), //  1:30 / 7:30
+        2 => ("╭───╮", "·───·", "╰───╯"), //  3/9 o'clock
+        3 => ("╭·──╮", "│ ╱ │", "╰──·╯"), //  4:30 / 10:30
+        4 => ("╭─·─╮", "│   │", "╰─·─╯"), //  6/12 o'clock
+        5 => ("╭──·╮", "│ ╲ │", "╰·──╯"), //  7:30 / 1:30
+        6 => ("╭───╮", "·───·", "╰───╯"), //  9/3 o'clock
+        7 => ("╭·──╮", "│ ╱ │", "╰──·╯"), // 10:30 / 4:30
+        _ => ("╭───╮", "│ ● │", "╰───╯"), // fallback
+    }
+}
+
+fn draw_pad_area(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: bool) {
+    let inner_w = area.width;
+    let block_w = 35u16;
+    let side = inner_w.saturating_sub(block_w) / 2;
+    let h = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(side),
+            Constraint::Length(block_w),
+            Constraint::Min(0),
+        ])
+        .split(area);
+    let centered = h[1];
+
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Length(7); 5])
+        .split(centered);
+
+    for c in 0..4 {
+        draw_pad_col(frame, cols[c], c, state, blink_on);
+    }
+    draw_side_col(frame, cols[4], state);
+}
+
+fn draw_pad_col(frame: &mut Frame, area: Rect, col: usize, state: &DisplayState, blink_on: bool) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(4),
-            Constraint::Length(4),
-            Constraint::Length(4),
-            Constraint::Length(4),
-        ])
+        .constraints([Constraint::Length(4); 4])
         .split(area);
 
     for row in 0..4 {
-        let idx = row * 4 + col;
-        draw_pad_cell(frame, rows[row], idx, state, blink_on);
+        draw_pad(frame, rows[row], row * 4 + col, state, blink_on);
     }
 }
 
-fn draw_pad_cell(frame: &mut Frame, area: Rect, idx: usize, state: &DisplayState, blink_on: bool) {
+fn draw_pad(frame: &mut Frame, area: Rect, idx: usize, state: &DisplayState, blink_on: bool) {
     if idx >= 16 { return; }
 
     let led = state.leds[idx];
     let label = PAD_LABELS[idx];
-
-    let (led_sym, led_color) = led_symbol(led, blink_on);
-    let pad_color = match led {
-        LedState::Off => DIM,
-        LedState::OnMedium => LED_MED,
-        LedState::OnHigh => LED_HI,
-        LedState::Blink => if blink_on { LED_HI } else { DIM },
-    };
+    let (led_sym, led_c) = led_symbol(led, blink_on);
+    let pad_c = pad_color(led, blink_on);
+    let lbl_c = if led == LedState::Off { TEXT } else { ACCENT };
 
     let lines = vec![
-        Line::from(Span::styled( // led indicator line
-            format!("  {}  ", led_sym),
-            Style::default().fg(led_color),
-        )),
-        Line::from(Span::styled(" .:::. ", Style::default().fg(pad_color))), // pad top
+        Line::from(Span::styled(led_sym, Style::default().fg(led_c))),
+        Line::from(Span::styled(".:::.", Style::default().fg(pad_c))),
         Line::from(vec![
-            Span::styled(" : ", Style::default().fg(pad_color)),
-            Span::styled(label, Style::default().fg(if led == LedState::Off { TEXT } else { ACCENT })
-                .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" : ", Style::default().fg(pad_color)),
+            Span::styled(": ", Style::default().fg(pad_c)),
+            Span::styled(label, Style::default().fg(lbl_c).add_modifier(Modifier::BOLD)),
+            Span::styled(" :", Style::default().fg(pad_c)),
         ]),
-        Line::from(Span::styled(" ':::' ", Style::default().fg(pad_color))), // pad bottom
-        Line::from(Span::styled(" ':::' ", Style::default().fg(pad_color))),
+        Line::from(Span::styled("':::'", Style::default().fg(pad_c))),
     ];
 
     frame.render_widget(Paragraph::new(lines).alignment(Alignment::Center), area);
@@ -252,65 +278,71 @@ fn draw_pad_cell(frame: &mut Frame, area: Rect, idx: usize, state: &DisplayState
 fn led_symbol(led: LedState, blink_on: bool) -> (&'static str, Color) {
     match led {
         LedState::Off => ("○", DIM),
-        LedState::OnMedium => ("●", LED_MED),
-        LedState::OnHigh => ("◉", LED_HI),
-        LedState::Blink => {
-            if blink_on { ("●", LED_HI) } else { ("○", DIM) }
-        }
+        LedState::OnMedium => ("●", LED_RED),
+        LedState::OnHigh => ("◉", LED_RED),
+        LedState::Blink => if blink_on { ("●", LED_RED) } else { ("○", DIM) },
     }
 }
 
-fn draw_side_buttons(frame: &mut Frame, area: Rect, state: &DisplayState) {
-    let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(4),
-            Constraint::Length(4),
-            Constraint::Length(4),
-            Constraint::Length(4),
-        ])
-        .split(area);
-
-    draw_side_button(frame, rows[0], "●", "rec", "b", false); // record button
-
-    draw_side_button(frame, rows[1], "●", "fx", "y", false); // fx button
-
-    let play_sym = if state.playing { "▶" } else { "■" };
-    draw_side_button(frame, rows[2], play_sym, "play", "spc", state.playing); // play/stop button
-
-    let write_sym = if state.write_mode { "●" } else { "○" };
-    draw_side_button(frame, rows[3], write_sym, "write", "t", state.write_mode); // write button
+fn pad_color(led: LedState, blink_on: bool) -> Color {
+    match led {
+        LedState::Off => DIM,
+        LedState::OnMedium => LED_MED,
+        LedState::OnHigh => LED_HI,
+        LedState::Blink => if blink_on { LED_HI } else { DIM },
+    }
 }
 
-fn draw_side_button(frame: &mut Frame, area: Rect, symbol: &str, label: &str, key: &str, active: bool) {
-    let sym_color = if active { ACCENT } else { MID };
-    let lbl_color = if active { ACCENT } else { TEXT };
+fn draw_side_col(frame: &mut Frame, area: Rect, state: &DisplayState) {
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(4); 4])
+        .split(area);
+
+    draw_side_btn(frame, rows[0], "●", "rec", "b", false);
+    draw_side_btn(frame, rows[1], "●", "fx", "y", false);
+
+    let ps = if state.playing { "▶" } else { "■" };
+    draw_side_btn(frame, rows[2], ps, "play", "_", state.playing);
+
+    let ws = if state.write_mode { "●" } else { "○" };
+    draw_side_btn(frame, rows[3], ws, "write", "t", state.write_mode);
+}
+
+fn draw_side_btn(frame: &mut Frame, area: Rect, sym: &str, label: &str, key: &str, active: bool) {
+    let c = if active { ACCENT } else { DIM };
+    let sc = if active { LED_RED } else { MID }; // dot red when lit
+    let lc = if active { ACCENT } else { TEXT };
 
     let lines = vec![
-        Line::from(""),
+        Line::from(Span::styled(".:::.", Style::default().fg(c))),
         Line::from(vec![
-            Span::styled(" (", Style::default().fg(DIM)),
-            Span::styled(symbol, Style::default().fg(sym_color)),
-            Span::styled(") ", Style::default().fg(DIM)),
-            Span::styled(label, Style::default().fg(lbl_color)),
+            Span::styled(": ", Style::default().fg(c)),
+            Span::styled(sym, Style::default().fg(sc)),
+            Span::styled(" :", Style::default().fg(c)),
         ]),
+        Line::from(Span::styled("':::'", Style::default().fg(c))),
         Line::from(vec![
-            Span::styled(format!("  ({})", key), Style::default().fg(DIM)),
+            Span::styled(format!("{} ", label), Style::default().fg(lc)),
+            Span::styled(format!("({})", key), Style::default().fg(DIM)),
         ]),
     ];
 
-    frame.render_widget(Paragraph::new(lines), area);
+    frame.render_widget(Paragraph::new(lines).alignment(Alignment::Center), area);
 }
 
 fn draw_footer(frame: &mut Frame, area: Rect) {
     let line = Line::from(vec![
-        Span::styled("  (esc)", Style::default().fg(DIM)),
-        Span::styled(" quit", Style::default().fg(MID)),
-        Span::styled("   (0)", Style::default().fg(DIM)),
-        Span::styled(" clear", Style::default().fg(MID)),
-        Span::styled("   (y)", Style::default().fg(DIM)),
-        Span::styled(" fx/page", Style::default().fg(MID)),
+        Span::styled("(esc)", Style::default().fg(DIM)),
+        Span::styled("quit ", Style::default().fg(MID)),
+        Span::styled("(0)", Style::default().fg(DIM)),
+        Span::styled("clr ", Style::default().fg(MID)),
+        Span::styled("(y)", Style::default().fg(DIM)),
+        Span::styled("pg", Style::default().fg(MID)),
     ]);
 
-    frame.render_widget(Paragraph::new(vec![line]).alignment(Alignment::Center), area);
+    frame.render_widget(
+        Paragraph::new(vec![line]).alignment(Alignment::Center),
+        area,
+    );
 }
