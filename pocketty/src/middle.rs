@@ -76,7 +76,8 @@ impl Middle {
             InputEvent::PlayPress => {
                 self.playing = !self.playing;
                 if self.playing {
-                    self.current_step = 0;
+                    // Start one step behind so the first advance_step() lands on step 0
+                    self.current_step = (STEPS_PER_PATTERN as u8).wrapping_sub(1);
                     self.step_accumulator = 0.0;
                     self.chain_position = 0;
                 }
