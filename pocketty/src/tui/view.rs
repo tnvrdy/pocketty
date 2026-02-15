@@ -22,8 +22,8 @@ const PAD_LABELS: [&str; 16] = [
     "Z", "X", "C", "V",
 ];
 
-// terminal chars are ~2:1 so 40×41 chars ≈ 40×82 visual
-const DEVICE_W: u16 = 40;
+// terminal chars are ~2:1; 42 width so right column (write/play labels) fits
+const DEVICE_W: u16 = 44;
 const DEVICE_H: u16 = 41;
 
 const LCD_ART: &str = r#"
@@ -170,7 +170,7 @@ fn draw_screen(frame: &mut Frame, area: Rect, state: &DisplayState) {
 
 fn draw_controls_row(frame: &mut Frame, area: Rect, state: &DisplayState) {
     let inner_w = area.width;
-    let block_w = 35u16;
+    let block_w = 40u16;  // 4×7 + 12 so right column fits "write (t)" / "play (_)"
     let side = inner_w.saturating_sub(block_w) / 2;
     let h = Layout::default()
         .direction(Direction::Horizontal)
@@ -184,7 +184,13 @@ fn draw_controls_row(frame: &mut Frame, area: Rect, state: &DisplayState) {
 
     let cols = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(7); 5])
+        .constraints([
+            Constraint::Length(7),
+            Constraint::Length(7),
+            Constraint::Length(7),
+            Constraint::Length(7),
+            Constraint::Length(12),  // rec, fx, play, write — room for "(t)" and "(_)"
+        ])
         .split(centered);
 
     let sh = state.display_text.starts_with("SND");
@@ -249,7 +255,7 @@ fn knob_art(value: f32) -> (&'static str, &'static str, &'static str) {
 
 fn draw_pad_area(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: bool) {
     let inner_w = area.width;
-    let block_w = 35u16;
+    let block_w = 40u16;  // same as controls row; right column 12 for labels
     let side = inner_w.saturating_sub(block_w) / 2;
     let h = Layout::default()
         .direction(Direction::Horizontal)
@@ -263,7 +269,13 @@ fn draw_pad_area(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: 
 
     let cols = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(7); 5])
+        .constraints([
+            Constraint::Length(7),
+            Constraint::Length(7),
+            Constraint::Length(7),
+            Constraint::Length(7),
+            Constraint::Length(12),
+        ])
         .split(centered);
 
     for c in 0..4 {
