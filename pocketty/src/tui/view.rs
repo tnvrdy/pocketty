@@ -22,9 +22,9 @@ const PAD_LABELS: [&str; 16] = [
     "Z", "X", "C", "V",
 ];
 
-// terminal chars are ~2:1; 42 width so right column (write/play labels) fits
-const DEVICE_W: u16 = 44;
-const DEVICE_H: u16 = 41;
+// 43 width: right column fits + 1 char left offset for pad grid
+const DEVICE_W: u16 = 43;
+const DEVICE_H: u16 = 39;  // compressed: no spacer between LCD and mode row
 
 const LCD_ART: &str = r#"
 ⠀⠀⣰⡿⠿⠿⢿⠆⠀⣴⡄⢀⣀⠀⠀⢀⣄⣀⠀⠀⠀⠀⠀⣀⡀⠀⠀⡊⠲⠉⢱⠀⠀⠀⢠⣤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -84,8 +84,8 @@ pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: boo
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(2),  // title
-            Constraint::Length(14), // LCD screen (art + text)
-            Constraint::Length(6),  // controls: buttons + knobs
+            Constraint::Length(13), // LCD
+            Constraint::Length(6),  // controls (shorter so 4×4 aligns with 5th column)
             Constraint::Length(17), // pad grid: 4 rows × 4 lines each
         ])
         .split(inner);
@@ -170,7 +170,8 @@ fn draw_screen(frame: &mut Frame, area: Rect, state: &DisplayState) {
 
 fn draw_controls_row(frame: &mut Frame, area: Rect, state: &DisplayState) {
     let inner_w = area.width;
-    let block_w = 40u16;  // 4×7 + 12 so right column fits "write (t)" / "play (_)"
+    // Same 41-wide block; 2-char gap before knobs so pitch knob is a bit right
+    let block_w = 41u16;
     let side = inner_w.saturating_sub(block_w) / 2;
     let h = Layout::default()
         .direction(Direction::Horizontal)
@@ -185,11 +186,13 @@ fn draw_controls_row(frame: &mut Frame, area: Rect, state: &DisplayState) {
     let cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
+            Constraint::Length(1),   // align with pad grid (1-char offset)
             Constraint::Length(7),
             Constraint::Length(7),
             Constraint::Length(7),
+            Constraint::Length(2),   // gap: pitch knob a few pixels right
             Constraint::Length(7),
-            Constraint::Length(12),  // rec, fx, play, write — room for "(t)" and "(_)"
+            Constraint::Length(12),
         ])
         .split(centered);
 
@@ -197,11 +200,11 @@ fn draw_controls_row(frame: &mut Frame, area: Rect, state: &DisplayState) {
     let ph = state.display_text.starts_with("PAT");
     let bh = state.display_text.starts_with("VOL");
 
-    draw_btn(frame, cols[0], "●", "sound", "g", sh);
-    draw_btn(frame, cols[1], "●", "pattn", "h", ph);
-    draw_btn(frame, cols[2], "●", "bpm", "n", bh);
-    draw_knob(frame, cols[3], state.knob_a_label, "[/]", state.knob_a_value);
-    draw_knob(frame, cols[4], state.knob_b_label, "-/=", state.knob_b_value);
+    draw_btn(frame, cols[1], "●", "sound", "g", sh);
+    draw_btn(frame, cols[2], "●", "pattn", "h", ph);
+    draw_btn(frame, cols[3], "●", "bpm", "n", bh);
+    draw_knob(frame, cols[5], state.knob_a_label, "[/]", state.knob_a_value);
+    draw_knob(frame, cols[6], state.knob_b_label, "-/=", state.knob_b_value);
 }
 
 fn draw_btn(frame: &mut Frame, area: Rect, sym: &str, label: &str, key: &str, active: bool) {
@@ -255,7 +258,8 @@ fn knob_art(value: f32) -> (&'static str, &'static str, &'static str) {
 
 fn draw_pad_area(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: bool) {
     let inner_w = area.width;
-    let block_w = 40u16;  // same as controls row; right column 12 for labels
+    // 1 + 7*4 + 12 = 41 so left 4 columns are shifted 1 char right
+    let block_w = 41u16;
     let side = inner_w.saturating_sub(block_w) / 2;
     let h = Layout::default()
         .direction(Direction::Horizontal)
@@ -270,6 +274,7 @@ fn draw_pad_area(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: 
     let cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
+            Constraint::Length(1),   // nudge left 4 columns 1 pixel right
             Constraint::Length(7),
             Constraint::Length(7),
             Constraint::Length(7),
@@ -279,9 +284,9 @@ fn draw_pad_area(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: 
         .split(centered);
 
     for c in 0..4 {
-        draw_pad_col(frame, cols[c], c, state, blink_on);
+        draw_pad_col(frame, cols[c + 1], c, state, blink_on);
     }
-    draw_side_col(frame, cols[4], state, blink_on);
+    draw_side_col(frame, cols[5], state, blink_on);
 }
 
 fn draw_pad_col(frame: &mut Frame, area: Rect, col: usize, state: &DisplayState, blink_on: bool) {
@@ -304,15 +309,16 @@ fn draw_pad(frame: &mut Frame, area: Rect, idx: usize, state: &DisplayState, bli
     let pad_c = pad_color(led, blink_on);
     let lbl_c = if led == LedState::Off { TEXT } else { ACCENT };
 
+    // Dot centered inside key; keyname below the key
     let lines = vec![
-        Line::from(Span::styled(led_sym, Style::default().fg(led_c))),
         Line::from(Span::styled(".:::.", Style::default().fg(pad_c))),
         Line::from(vec![
             Span::styled(": ", Style::default().fg(pad_c)),
-            Span::styled(label, Style::default().fg(lbl_c).add_modifier(Modifier::BOLD)),
+            Span::styled(led_sym, Style::default().fg(led_c)),
             Span::styled(" :", Style::default().fg(pad_c)),
         ]),
         Line::from(Span::styled("':::'", Style::default().fg(pad_c))),
+        Line::from(Span::styled(label, Style::default().fg(lbl_c).add_modifier(Modifier::BOLD))),
     ];
 
     frame.render_widget(Paragraph::new(lines).alignment(Alignment::Center), area);
