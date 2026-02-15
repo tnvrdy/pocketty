@@ -7,6 +7,11 @@ pub struct SampleBuffer {
 }
 
 impl SampleBuffer {
+    /// Build a SampleBuffer directly from pre-existing stereo frames
+    pub fn from_frames(frames: Vec<StereoFrame>) -> Self {
+        Self { data: frames }
+    }
+
     // Load a WAV file from disk into the sample buffer
     pub fn load_wav(path: &Path, target_rate: u32, target_channels: u16) -> anyhow::Result<Self> {
         let mut reader = hound::WavReader::open(path)?;
@@ -56,6 +61,22 @@ impl SampleBuffer {
         }
 
         Ok(Self { data: frames })
+    }
+
+    pub fn save_wav(&self, path: &Path, sample_rate: u32) -> anyhow::Result<()> {
+        let spec = hound::WavSpec {
+            channels: 2,
+            sample_rate,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+        let mut writer = hound::WavWriter::create(path, spec)?;
+        for frame in &self.data {
+            writer.write_sample(frame.left)?;
+            writer.write_sample(frame.right)?;
+        }
+        writer.finalize()?;
+        Ok(())
     }
 }
 
