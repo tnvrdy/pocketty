@@ -49,6 +49,7 @@ fn handle_key(code: KeyCode, ts: &mut TuiState) -> Vec<InputEvent> {
         KeyCode::Char('Y') => { ts.fx_held = false; vec![InputEvent::FxUp] }
         KeyCode::Char('n') => { ts.bpm_held = true; vec![InputEvent::BpmDown] }
         KeyCode::Char('N') => { ts.bpm_held = false; vec![InputEvent::BpmUp] }
+        KeyCode::Char('0') => vec![InputEvent::ClearTrack],
 
         // knobs for more continuous control
         KeyCode::Char('[') => resolve_knob_a(-0.05, ts),
