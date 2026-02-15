@@ -3,32 +3,34 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crate::shared::{InputEvent, ParamPage};
 use super::mode::TuiState;
 
-// poll for input from tui, tracks state of key presses/holds in tuistate,
-// resolves key combos to sequences of input events for the backend to handle
+// All modifier buttons are TOGGLES: press once = on, press again = off.
+// Buttons do NOT repeat when held. Knobs DO repeat when held.
+// Keyboard enhancement (if the terminal supports it) gives us Press vs Repeat
+// distinction so we can filter repeats for buttons while allowing them for knobs.
 pub fn poll_input(timeout: Duration, ts: &mut TuiState) -> anyhow::Result<Vec<InputEvent>> {
     if !event::poll(timeout)? {
         return Ok(vec![]);
     }
 
     if let Event::Key(key) = event::read()? {
-        if key.kind != KeyEventKind::Press {
-            return Ok(vec![]);
-        }
-        return Ok(handle_key(key.code, ts));
+        return Ok(match key.kind {
+            KeyEventKind::Press => handle_press(key.code, ts),
+            KeyEventKind::Repeat => handle_repeat(key.code, ts),
+            KeyEventKind::Release => handle_release(key.code, ts),
+        });
     }
     Ok(vec![])
 }
 
-fn handle_key(code: KeyCode, ts: &mut TuiState) -> Vec<InputEvent> {
+// ── First press ──────────────────────────────────────────────────
+
+fn handle_press(code: KeyCode, ts: &mut TuiState) -> Vec<InputEvent> {
     match code {
         KeyCode::Esc => vec![InputEvent::Quit],
         KeyCode::Char(' ') => vec![InputEvent::PlayPress],
 
-        // any keys on the 4x4 grid pad
-        KeyCode::Char(c @ ('1' | '2' | '3' | '4'
-            | 'q' | 'w' | 'e' | 'r'
-            | 'a' | 's' | 'd' | 'f'
-            | 'z' | 'x' | 'c' | 'v')) => {
+        // 4×4 grid pads
+        KeyCode::Char(c) if is_pad_char(c) => {
             if let Some(n) = char_to_pad(c) {
                 resolve_grid(n, ts)
             } else {
@@ -36,22 +38,35 @@ fn handle_key(code: KeyCode, ts: &mut TuiState) -> Vec<InputEvent> {
             }
         }
 
-        // keys that modify params, lowercase = down and shifted = up
-        KeyCode::Char('g') => { ts.sound_held = true; vec![InputEvent::SoundDown] }
-        KeyCode::Char('G') => { ts.sound_held = false; vec![InputEvent::SoundUp] }
-        KeyCode::Char('h') => { ts.pattern_held = true; vec![InputEvent::PatternDown] }
-        KeyCode::Char('H') => { ts.pattern_held = false; vec![InputEvent::PatternUp] }
-        KeyCode::Char('t') => { ts.write_held = true; vec![InputEvent::WriteDown] }
-        KeyCode::Char('T') => { ts.write_held = false; vec![InputEvent::WriteUp] }
-        KeyCode::Char('b') => { ts.record_held = true; vec![InputEvent::RecordDown] }
-        KeyCode::Char('B') => { ts.record_held = false; vec![InputEvent::RecordUp] }
-        KeyCode::Char('y') => { ts.fx_held = true; vec![InputEvent::FxDown] }
-        KeyCode::Char('Y') => { ts.fx_held = false; vec![InputEvent::FxUp] }
-        KeyCode::Char('n') => { ts.bpm_held = true; vec![InputEvent::BpmDown] }
-        KeyCode::Char('N') => { ts.bpm_held = false; vec![InputEvent::BpmUp] }
+        // modifier toggles: press once = on, press again = off
+        KeyCode::Char('g') => {
+            ts.sound_held = !ts.sound_held;
+            if ts.sound_held { vec![InputEvent::SoundDown] } else { vec![InputEvent::SoundUp] }
+        }
+        KeyCode::Char('h') => {
+            ts.pattern_held = !ts.pattern_held;
+            if ts.pattern_held { vec![InputEvent::PatternDown] } else { vec![InputEvent::PatternUp] }
+        }
+        KeyCode::Char('t') => {
+            // Always send WriteDown — backend toggles write_mode on every WriteDown
+            vec![InputEvent::WriteDown]
+        }
+        KeyCode::Char('b') => {
+            ts.record_held = !ts.record_held;
+            if ts.record_held { vec![InputEvent::RecordDown] } else { vec![InputEvent::RecordUp] }
+        }
+        KeyCode::Char('y') => {
+            ts.fx_held = !ts.fx_held;
+            if ts.fx_held { vec![InputEvent::FxDown] } else { vec![InputEvent::FxUp] }
+        }
+        KeyCode::Char('n') => {
+            ts.bpm_held = !ts.bpm_held;
+            if ts.bpm_held { vec![InputEvent::BpmDown] } else { vec![InputEvent::BpmUp] }
+        }
+
         KeyCode::Char('0') => vec![InputEvent::ClearTrack],
 
-        // knobs for more continuous control
+        // knobs (also handled in handle_repeat for auto-repeat)
         KeyCode::Char('[') => resolve_knob_a(-0.05, ts),
         KeyCode::Char(']') => resolve_knob_a(0.05, ts),
         KeyCode::Char('-') => resolve_knob_b(-0.05, ts),
@@ -61,72 +76,118 @@ fn handle_key(code: KeyCode, ts: &mut TuiState) -> Vec<InputEvent> {
     }
 }
 
-// resolve grid keypresses into semantic inputevents based on held state
-fn resolve_grid(n: u8, ts: &TuiState) -> Vec<InputEvent> {
-    if ts.sound_held { // if in sound mode, select sound
+// ── Auto-repeat (held key) — only knobs repeat ──────────────────
+
+fn handle_repeat(code: KeyCode, ts: &mut TuiState) -> Vec<InputEvent> {
+    match code {
+        KeyCode::Char('[') => resolve_knob_a(-0.05, ts),
+        KeyCode::Char(']') => resolve_knob_a(0.05, ts),
+        KeyCode::Char('-') => resolve_knob_b(-0.05, ts),
+        KeyCode::Char('=') => resolve_knob_b(0.05, ts),
+        _ => vec![], // all other keys: ignore repeats
+    }
+}
+
+// ── Key release — only used to clear held_step for per-step editing ─
+
+fn handle_release(code: KeyCode, ts: &mut TuiState) -> Vec<InputEvent> {
+    if let KeyCode::Char(c) = code {
+        if is_pad_char(c) {
+            ts.held_step = None;
+        }
+    }
+    vec![]
+}
+
+// ── Grid resolution ──────────────────────────────────────────────
+
+fn resolve_grid(n: u8, ts: &mut TuiState) -> Vec<InputEvent> {
+    if ts.sound_held {
         return vec![InputEvent::SelectSound(n)];
     }
-    if ts.pattern_held { // if in pattern mode, select pattern
+    if ts.pattern_held {
         if ts.playing {
             return vec![InputEvent::ChainPattern(n)];
         } else {
             return vec![InputEvent::SelectPattern(n)];
         }
     }
-    if ts.bpm_held { // if holding bpm and pressing a pad, set volume
-        return vec![InputEvent::SetVolume(n + 1)]; // volume 1-16
+    if ts.bpm_held {
+        return vec![InputEvent::SetVolume(n + 1)];
     }
-    if ts.fx_held && ts.playing { // if holding fx and pressing a pad, set fx
+    if ts.fx_held && ts.playing {
         if n == 15 {
             return vec![InputEvent::ClearRealtimeEffect];
         } else {
-            return vec![InputEvent::SetRealtimeEffect(n + 1)]; // fx 1-15
+            return vec![InputEvent::SetRealtimeEffect(n + 1)];
         }
     }
-    if ts.record_held && ts.sound_held { // if holding record and sound and pressing a pad, delete sound
+    if ts.record_held && ts.sound_held {
         return vec![InputEvent::DeleteSound];
     }
-    if ts.write_mode && !ts.playing { // if in write mode, toggle step
+    if ts.write_mode && !ts.playing {
+        // Write mode (stopped): toggle step AND track it for per-step knob editing
+        ts.held_step = Some(n);
         return vec![InputEvent::ToggleStep(n)];
     }
-    if ts.write_held && ts.playing { // if in live record mode, record step
+    if ts.write_mode && ts.playing {
+        // Write mode (playing): live record — quantize the note into the pattern
         return vec![InputEvent::LiveRecordStep(n)];
     }
-    // by default, trigger pad melodically
+    // default: trigger pad melodically
     vec![InputEvent::TriggerPad(n)]
 }
 
-// resolve knob a turn into a semantic event based on held state + param page
+// ── Knob resolution ──────────────────────────────────────────────
+
 fn resolve_knob_a(delta: f32, ts: &TuiState) -> Vec<InputEvent> {
-    if ts.bpm_held { // if using knob to adjust swing
-        return vec![InputEvent::AdjustSwing(delta) ];
+    if ts.bpm_held {
+        return vec![InputEvent::AdjustSwing(delta)];
     }
-    if ts.write_held && ts.playing { // if using knob to adjust pitch locking
+    // Per-step pitch lock: holding a step pad in write mode (stopped) + knob A
+    if let Some(step) = ts.held_step {
+        if ts.write_mode && !ts.playing {
+            return vec![InputEvent::LockStepPitchAt { step, delta }];
+        }
+    }
+    if ts.write_mode && ts.playing {
         return vec![InputEvent::PitchLockStep(delta)];
     }
-    match ts.param_page { // if using knob to adjust {tone, filter, trim} params
+    match ts.param_page {
         ParamPage::Tone => vec![InputEvent::AdjustPitch(delta)],
         ParamPage::Filter => vec![InputEvent::AdjustFilterCutoff(delta)],
         ParamPage::Trim => vec![InputEvent::AdjustTrimStart(delta)],
     }
 }
 
-// resolve knob b turn into a semantic event based on held state + param page
 fn resolve_knob_b(delta: f32, ts: &TuiState) -> Vec<InputEvent> {
-    if ts.bpm_held { // if using knob to adjust bpm
+    if ts.bpm_held {
         return vec![InputEvent::AdjustBpm(delta)];
     }
-    if ts.write_held && ts.playing { // if using knob to adjust gain locking
+    // Per-step gain lock: holding a step pad in write mode (stopped) + knob B
+    if let Some(step) = ts.held_step {
+        if ts.write_mode && !ts.playing {
+            return vec![InputEvent::LockStepGainAt { step, delta }];
+        }
+    }
+    if ts.write_mode && ts.playing {
         return vec![InputEvent::GainLockStep(delta)];
     }
-    match ts.param_page { // if using knob to adjust {tone, filter, trim} params
+    match ts.param_page {
         ParamPage::Tone => vec![InputEvent::AdjustGain(delta)],
         ParamPage::Filter => vec![InputEvent::AdjustFilterResonance(delta)],
         ParamPage::Trim => vec![InputEvent::AdjustTrimLength(delta)],
     }
 }
 
-// convert char to pad index
+// ── Helpers ──────────────────────────────────────────────────────
+
+fn is_pad_char(c: char) -> bool {
+    matches!(c, '1'..='4' | 'q' | 'w' | 'e' | 'r'
+                | 'a' | 's' | 'd' | 'f'
+                | 'z' | 'x' | 'c' | 'v')
+}
+
 fn char_to_pad(c: char) -> Option<u8> {
     let idx = match c {
         '1' => 0, '2' => 1, '3' => 2, '4' => 3,

@@ -106,14 +106,18 @@ pub enum InputEvent {
     // semantic knob events, again resolving by tui
     AdjustSwing(f32), // held bpm + knob a
     AdjustBpm(f32), // held bpm + knob b
-    PitchLockStep(f32), // held write + playing + knob a
-    GainLockStep(f32), // held write + playing + knob b
+    PitchLockStep(f32), // held write + playing + knob a (locks current playing step)
+    GainLockStep(f32), // held write + playing + knob b (locks current playing step)
     AdjustPitch(f32), // default knob a (tone page)
     AdjustGain(f32), // default knob b (tone page)
     AdjustFilterCutoff(f32), // default knob a (filter page)
     AdjustFilterResonance(f32), // default knob b (filter page)
     AdjustTrimStart(f32), // default knob a (trim page)
     AdjustTrimLength(f32), // default knob b (trim page)
+
+    // per-step parameter locks: hold a step pad in write mode (stopped) + turn knob
+    LockStepPitchAt { step: u8, delta: f32 }, // semitone-based pitch lock
+    LockStepGainAt { step: u8, delta: f32 },  // gain lock
 }
 
 #[derive(Clone, Debug)]

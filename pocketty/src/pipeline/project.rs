@@ -43,7 +43,7 @@ impl Default for SoundSlot {
             buffer_len: 0,
             trim_start: 0,
             length: 44100,
-            gain: 0.8,
+            gain: 0.5,
             pitch: 1.0,
             filter_cutoff: 20000.0,
             filter_resonance: 0.0,

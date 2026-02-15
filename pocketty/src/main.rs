@@ -25,6 +25,14 @@ fn main() {
 
 fn run() -> anyhow::Result<()> {
     terminal::enable_raw_mode()?;
+    // Enable keyboard enhancement for real press/release detection.
+    // Falls back gracefully if the terminal doesn't support it.
+    let _ = crossterm::execute!(
+        std::io::stdout(),
+        crossterm::event::PushKeyboardEnhancementFlags(
+            crossterm::event::KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+        )
+    );
     let _guard = RawModeGuard; // auto drops when out of scope
     let audio = audio::start_audio()?;
     let project_dir: PathBuf = std::env::args()
@@ -122,6 +130,10 @@ fn run() -> anyhow::Result<()> {
 struct RawModeGuard;
 impl Drop for RawModeGuard {
     fn drop(&mut self) {
+        let _ = crossterm::execute!(
+            std::io::stdout(),
+            crossterm::event::PopKeyboardEnhancementFlags
+        );
         let _ = terminal::disable_raw_mode();
     }
 }

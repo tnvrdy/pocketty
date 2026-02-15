@@ -108,9 +108,24 @@ impl Voice {
                 right: lerp(s0.right, s1.right, frac),
             };
 
-            // gain
-            frame.left += sample.left * self.gain;
-            frame.right += sample.right * self.gain;
+            // Short fade-out near the end to avoid hard clicks (~6ms at 44.1kHz)
+            const FADE_SAMPLES: f32 = 256.0;
+            // Positional fade (end of sample region)
+            let pos_dist = if self.reverse {
+                self.pos
+            } else {
+                (self.length as f32 - self.pos).max(0.0)
+            };
+            let pos_fade = (pos_dist / FADE_SAMPLES).min(1.0);
+            // Lifetime fade (end of stutter lifetime)
+            let life_dist = self.length.saturating_sub(self.frames_rendered) as f32;
+            let life_fade = (life_dist / FADE_SAMPLES).min(1.0);
+            let fade = pos_fade.min(life_fade);
+
+            // gain + fade
+            let g = self.gain * fade;
+            frame.left += sample.left * g;
+            frame.right += sample.right * g;
 
             // advance position
             if self.reverse {

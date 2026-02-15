@@ -10,6 +10,7 @@ use crate::pipeline::project::{HeldButtons, ProjectState, SoundSlot};
 use crate::shared::*;
 
 const FX_TAP_THRESHOLD_MS: u128 = 200;
+const SAMPLE_RATE: f32 = 44100.0;
 
 pub struct Middle {
     pub state: ProjectState,
@@ -62,10 +63,8 @@ impl Middle {
 
             InputEvent::WriteDown => {
                 self.held.write_held = true;
-                if !self.playing {
-                    // When stopped, Write toggles write mode
-                    self.write_mode = !self.write_mode;
-                }
+                // Toggle write mode (stopped or playing)
+                self.write_mode = !self.write_mode;
                 vec![]
             }
             InputEvent::WriteUp => {
@@ -80,8 +79,11 @@ impl Middle {
                     self.current_step = (STEPS_PER_PATTERN as u8).wrapping_sub(1);
                     self.step_accumulator = 0.0;
                     self.chain_position = 0;
+                    vec![]
+                } else {
+                    // Stopping: kill all playing voices immediately
+                    vec![AudioCommand::StopAllVoices]
                 }
-                vec![]
             }
 
             InputEvent::RecordDown => {
@@ -118,6 +120,7 @@ impl Middle {
             }
             InputEvent::FxUp => {
                 self.held.fx = false;
+                let had_effect = self.active_rt_effect.is_some();
                 self.active_rt_effect = None;
                 // If it was a quick tap (< threshold), cycle param page
                 if let Some(at) = self.fx_down_at.take() {
@@ -125,7 +128,8 @@ impl Middle {
                         self.param_page = self.param_page.next();
                     }
                 }
-                vec![]
+                // Kill lingering voices (stutter/loop) when leaving fx mode
+                if had_effect { vec![AudioCommand::StopAllVoices] } else { vec![] }
             }
 
             InputEvent::BpmDown => {
@@ -159,18 +163,32 @@ impl Middle {
             InputEvent::ToggleStep(n) => {
                 let pi = self.state.selected_pattern as usize;
                 let si = self.state.selected_sound as usize;
-                self.state.patterns[pi].tracks[si].steps[n as usize].active ^= true;
+                let step = &mut self.state.patterns[pi].tracks[si].steps[n as usize];
+                step.active = !step.active;
+                if !step.active {
+                    // Reset all per-step locks when untoggling
+                    step.pitch_lock = None;
+                    step.gain_lock = None;
+                    step.filter_cutoff_lock = None;
+                    step.filter_resonance_lock = None;
+                    step.effect = None;
+                }
                 vec![]
             }
             InputEvent::LiveRecordStep(n) => {
                 let quantized_step = self.quantize_to_nearest_step();
                 let pi = self.state.selected_pattern as usize;
                 let si = self.state.selected_sound as usize;
-                self.state.patterns[pi].tracks[si].steps[quantized_step].active = true;
-                let _ = n; // pad number used by TUI for resolution; we quantize here
-                self.trigger_sound(self.state.selected_sound)
+                let pitch_mult = Self::pad_to_major_scale_pitch(n);
+                let step = &mut self.state.patterns[pi].tracks[si].steps[quantized_step];
+                step.active = true;
+                step.pitch_lock = Some(pitch_mult);
+                // Also trigger immediately at the recorded pitch so you hear what you played
+                self.trigger_sound_with_pitch(self.state.selected_sound, Some(pitch_mult))
             }
             InputEvent::SetRealtimeEffect(fx_num) => {
+                // Kill old effect voices before switching to new effect
+                let mut cmds = vec![AudioCommand::StopAllVoices];
                 self.active_rt_effect = Some(fx_num);
                 if self.write_mode {
                     let pi = self.state.selected_pattern as usize;
@@ -179,7 +197,7 @@ impl Middle {
                     self.state.patterns[pi].tracks[sound_idx].steps[si].effect =
                         Some(fx_num);
                 }
-                vec![]
+                cmds
             }
             InputEvent::ClearRealtimeEffect => {
                 self.active_rt_effect = None;
@@ -190,7 +208,8 @@ impl Middle {
                         track.steps[si].effect = None;
                     }
                 }
-                vec![]
+                // Kill lingering stutter/loop voices immediately
+                vec![AudioCommand::StopAllVoices]
             }
             InputEvent::DeleteSound => {
                 self.state.sounds[self.state.selected_sound as usize] = SoundSlot::default();
@@ -224,7 +243,10 @@ impl Middle {
                 let sound = &self.state.sounds[sound_idx];
                 let step = &mut self.state.patterns[pi].tracks[sound_idx].steps[si];
                 let current = step.pitch_lock.unwrap_or(sound.pitch);
-                step.pitch_lock = Some((current + delta * 1.5).clamp(0.5, 2.0));
+                // Multiplicative: ~0.24 semitones per click, round-trips cleanly
+                let semitones = delta * 4.8;
+                let factor = 2.0_f32.powf(semitones / 12.0);
+                step.pitch_lock = Some((current * factor).clamp(0.5, 2.0));
                 vec![]
             }
             InputEvent::GainLockStep(delta) => {
@@ -239,7 +261,10 @@ impl Middle {
             }
             InputEvent::AdjustPitch(delta) => {
                 let sound = &mut self.state.sounds[self.state.selected_sound as usize];
-                sound.pitch = (sound.pitch + delta * 1.5).clamp(0.5, 2.0);
+                // Multiplicative: ~0.24 semitones per click, round-trips cleanly
+                let semitones = delta * 4.8;
+                let factor = 2.0_f32.powf(semitones / 12.0);
+                sound.pitch = (sound.pitch * factor).clamp(0.5, 2.0);
                 vec![]
             }
             InputEvent::AdjustGain(delta) => {
@@ -261,7 +286,8 @@ impl Middle {
             InputEvent::AdjustTrimStart(delta) => {
                 let sound = &mut self.state.sounds[self.state.selected_sound as usize];
                 let max = sound.buffer_len.saturating_sub(1);
-                let step_size = (max as f32 * delta.abs()).max(1.0) as usize;
+                // Much finer: 0.2% of buffer per click (was 5%)
+                let step_size = (max as f32 * delta.abs() * 0.04).max(1.0) as usize;
                 if delta > 0.0 {
                     sound.trim_start = (sound.trim_start + step_size).min(max);
                 } else {
@@ -274,12 +300,36 @@ impl Middle {
             InputEvent::AdjustTrimLength(delta) => {
                 let sound = &mut self.state.sounds[self.state.selected_sound as usize];
                 let max = sound.buffer_len.saturating_sub(sound.trim_start);
-                let step_size = (max as f32 * delta.abs()).max(1.0) as usize;
+                // A little finer: 1% of buffer per click (was 5%)
+                let step_size = (max as f32 * delta.abs() * 0.2).max(1.0) as usize;
                 if delta > 0.0 {
                     sound.length = (sound.length + step_size).min(max);
                 } else {
                     sound.length = sound.length.saturating_sub(step_size).max(1);
                 }
+                vec![]
+            }
+
+            // Per-step parameter locks (hold step in write mode, stopped, + knob)
+            InputEvent::LockStepPitchAt { step, delta } => {
+                let pi = self.state.selected_pattern as usize;
+                let sound_idx = self.state.selected_sound as usize;
+                let sound = &self.state.sounds[sound_idx];
+                let s = &mut self.state.patterns[pi].tracks[sound_idx].steps[step as usize];
+                let current = s.pitch_lock.unwrap_or(sound.pitch);
+                // Semitone-based: delta=0.05 → ~0.24 semitones (all 12 chromatic notes reachable)
+                let semitones = delta * 4.8;
+                let factor = 2.0_f32.powf(semitones / 12.0);
+                s.pitch_lock = Some((current * factor).clamp(0.25, 4.0));
+                vec![]
+            }
+            InputEvent::LockStepGainAt { step, delta } => {
+                let pi = self.state.selected_pattern as usize;
+                let sound_idx = self.state.selected_sound as usize;
+                let sound = &self.state.sounds[sound_idx];
+                let s = &mut self.state.patterns[pi].tracks[sound_idx].steps[step as usize];
+                let current = s.gain_lock.unwrap_or(sound.gain);
+                s.gain_lock = Some((current + delta).clamp(0.0, 1.0));
                 vec![]
             }
 
@@ -294,7 +344,14 @@ impl Middle {
 
         self.step_accumulator += elapsed;
 
-        let secs_per_step = 60.0 / (self.state.bpm as f64 * 4.0);
+        // Effect 13 (6/8 quantize): triplet swing timing
+        let base = 60.0 / (self.state.bpm as f64 * 4.0);
+        let secs_per_step = if self.active_rt_effect == Some(13) {
+            // Alternate long/short steps to create a triplet feel (2:1 ratio)
+            if self.current_step % 2 == 0 { base * 4.0 / 3.0 } else { base * 2.0 / 3.0 }
+        } else {
+            base
+        };
 
         let mut commands = Vec::new();
 
@@ -335,11 +392,16 @@ impl Middle {
 
             let gain = step.gain_lock.unwrap_or(sound.gain)
                 * (self.state.master_volume as f32 / 16.0);
-            let pitch = step.pitch_lock.unwrap_or(sound.pitch);
+            let mut pitch = step.pitch_lock.unwrap_or(sound.pitch);
 
             // Real-time effect (y + pad) takes priority over per-step saved effect
             let fx = self.active_rt_effect.or(step.effect);
             let effect_chain = self.build_effect_chain(sound, fx);
+
+            // Derive voice-level modifiers from the active effect
+            let (reverse, stutter_period_samples, pitch_mult, is_unison, unison_detune) =
+                Self::derive_trigger_mods_from_fx(self.state.bpm, fx);
+            pitch *= pitch_mult;
 
             commands.push(AudioCommand::Trigger(TriggerParams {
                 sample_id,
@@ -347,10 +409,38 @@ impl Middle {
                 length: sound.length,
                 gain,
                 pitch,
-                effect_chain,
-                reverse: false,
-                stutter_period_samples: None,
+                effect_chain: effect_chain.clone(),
+                reverse,
+                stutter_period_samples,
             }));
+
+            // Unison: trigger a second voice with slight detune
+            if is_unison {
+                let detune_factor = 2.0_f32.powf(unison_detune / 1200.0);
+                commands.push(AudioCommand::Trigger(TriggerParams {
+                    sample_id,
+                    trim_start: sound.trim_start,
+                    length: sound.length,
+                    gain,
+                    pitch: pitch * detune_factor,
+                    effect_chain,
+                    reverse,
+                    stutter_period_samples,
+                }));
+            }
+        }
+
+        // Effect 14 (retrigger): reset pattern to step 0 on next advance
+        let has_retrigger = self.active_rt_effect == Some(14) || {
+            let pattern = &self.state.patterns[pi];
+            pattern.tracks.iter().any(|t| {
+                let step = &t.steps[si];
+                step.active && step.effect == Some(14)
+            })
+        };
+        if has_retrigger {
+            // Next advance_step will increment this to 0
+            self.current_step = STEPS_PER_PATTERN as u8 - 1;
         }
     }
 
@@ -403,8 +493,9 @@ impl Middle {
         let sound = &self.state.sounds[self.state.selected_sound as usize];
         let (knob_a, knob_b) = match self.param_page {
             ParamPage::Tone => (
-                // pitch: 0.5-2.0 mapped to 0.0-1.0
-                (sound.pitch - 0.5) / 1.5,
+                // pitch: 0.5-2.0 mapped to 0.0-1.0 via log2
+                // log2(0.5)=-1 → 0.0, log2(1.0)=0 → 0.5, log2(2.0)=1 → 1.0
+                ((sound.pitch.log2() + 1.0) / 2.0).clamp(0.0, 1.0),
                 sound.gain,
             ),
             ParamPage::Filter => (
@@ -468,7 +559,7 @@ impl Middle {
             knob_a_label: "PITCH",
             knob_b_label: "GAIN",
             knob_a_value: 0.5,
-            knob_b_value: 0.8,
+            knob_b_value: 0.5,
         }
     }
 
@@ -479,12 +570,27 @@ impl Middle {
         target_rate: u32,
     ) -> anyhow::Result<AudioCommand> {
         let (sample_id, buffer) = sample_loader::load(path, target_rate)?;
+        let buf_len = buffer.data.len();
         let sound = &mut self.state.sounds[slot as usize];
+        let is_fresh = sound.sample_path.is_empty();
+
         sound.sample_path = path.to_string_lossy().into_owned();
         sound.sample_id = Some(sample_id);
-        sound.buffer_len = buffer.data.len();
-        sound.trim_start = 0;
-        sound.length = buffer.data.len();
+        sound.buffer_len = buf_len;
+
+        if is_fresh {
+            // First time loading: use full buffer
+            sound.trim_start = 0;
+            sound.length = buf_len;
+        } else {
+            // Restoring from saved state: preserve trim/length, clamp to buffer
+            if sound.trim_start >= buf_len {
+                sound.trim_start = 0;
+            }
+            let remaining = buf_len.saturating_sub(sound.trim_start);
+            sound.length = sound.length.min(remaining).max(1);
+        }
+
         Ok(AudioCommand::RegisterSample { id: sample_id, buffer })
     }
 
@@ -541,57 +647,125 @@ impl Middle {
         };
 
         let gain = sound.gain * (self.state.master_volume as f32 / 16.0);
-        let effect_chain = self.build_effect_chain(sound, self.active_rt_effect);
+        let fx = self.active_rt_effect;
+        let effect_chain = self.build_effect_chain(sound, fx);
+        let (reverse, stutter_period_samples, pitch_mult, is_unison, unison_detune) =
+            Self::derive_trigger_mods_from_fx(self.state.bpm, fx);
         let pitch = match pitch_override_mult {
-            Some(m) => sound.pitch * m,
-            None => sound.pitch,
+            Some(m) => sound.pitch * m * pitch_mult,
+            None => sound.pitch * pitch_mult,
         };
 
-        vec![AudioCommand::Trigger(TriggerParams {
+        let mut cmds = vec![AudioCommand::Trigger(TriggerParams {
             sample_id,
             trim_start: sound.trim_start,
             length: sound.length,
             gain,
             pitch,
-            effect_chain,
-            reverse: false,
-            stutter_period_samples: None,
-        })]
+            effect_chain: effect_chain.clone(),
+            reverse,
+            stutter_period_samples,
+        })];
+
+        if is_unison {
+            let detune_factor = 2.0_f32.powf(unison_detune / 1200.0);
+            cmds.push(AudioCommand::Trigger(TriggerParams {
+                sample_id,
+                trim_start: sound.trim_start,
+                length: sound.length,
+                gain,
+                pitch: pitch * detune_factor,
+                effect_chain,
+                reverse,
+                stutter_period_samples,
+            }));
+        }
+
+        cmds
     }
 
     fn trigger_sound(&self, slot: u8) -> Vec<AudioCommand> {
         self.trigger_sound_with_pitch(slot, None)
     }
 
-    fn build_effect_chain(&self, _sound: &SoundSlot, fx: Option<u8>) -> Vec<EffectSpec> {
-        // PO-33 effect map for reference (not all implemented yet):
-        //   1-4: Loop variants (not implemented)
-        //   5-6: Unison (not implemented)
-        //   7: octave up (handled via pitch in advance_step, not effect chain)
-        //   8: octave down (handled via pitch in advance_step, not effect chain)
-        //   9-10: Stutter { period } (not implemented)
-        //   11-12: Scratch (not implemented)
-        //   13: 6/8 quantize (sequencer-level, not effect chain)
-        //   14: retrigger pattern (sequencer-level)
-        //   15: reverse (not implemented)
+    fn build_effect_chain(&self, _sound: &SoundSlot, _fx: Option<u8>) -> Vec<EffectSpec> {
+        // PO-33 effects are all handled via voice params (stutter, pitch, reverse)
+        // or sequencer logic (retrigger, 6/8 quantize). None use the sample-domain
+        // effect chain. Keeping this for future custom effects.
         //
-        // Current mapping using available effects:
-        //   1: Distortion (light)
-        //   2: Distortion (medium)
-        //   3: Distortion (heavy)
-        //   4: Bitcrusher (light)
-        //   5: Bitcrusher (medium)
-        //   6: Bitcrusher (heavy)
-        //   7-15: not yet wired to audio effects
-        match fx {
-            Some(1) => vec![EffectSpec::Distortion { drive: 0.3 }],
-            Some(2) => vec![EffectSpec::Distortion { drive: 0.6 }],
-            Some(3) => vec![EffectSpec::Distortion { drive: 1.0 }],
-            Some(4) => vec![EffectSpec::Bitcrusher { levels: 256 }],
-            Some(5) => vec![EffectSpec::Bitcrusher { levels: 32 }],
-            Some(6) => vec![EffectSpec::Bitcrusher { levels: 8 }],
-            _ => vec![],
-        }
+        // PO-33 effect map (all handled outside the chain):
+        //   1: loop 16       → stutter (1 beat)
+        //   2: loop 12       → stutter (triplet)
+        //   3: loop short    → stutter (1/2 step)
+        //   4: loop shorter  → stutter (1/4 step)
+        //   5: unison        → double trigger with +7 cent detune
+        //   6: unison low    → double trigger with -7 cent detune
+        //   7: octave up     → pitch *= 2.0
+        //   8: octave down   → pitch *= 0.5
+        //   9: stutter 4     → stutter (1 step)
+        //   10: stutter 3    → stutter (triplet step)
+        //   11: scratch       → knob A sends SetPlaybackPosition
+        //   12: scratch fast  → knob A sends SetPlaybackPosition (fine)
+        //   13: 6/8 quantize  → tick() adjusts step timing
+        //   14: retrigger     → advance_step resets current_step
+        //   15: reverse       → reverse flag on voice
+        vec![]
+    }
+
+    /// Derive voice-level modifiers (reverse, stutter, pitch) from an effect number.
+    /// These are NOT in the effect chain — they change how the Voice reads the buffer.
+    /// Returns (reverse, stutter_period_samples, pitch_mult, is_unison, unison_detune).
+    fn derive_trigger_mods_from_fx(bpm: f32, fx: Option<u8>) -> (bool, Option<u32>, f32, bool, f32) {
+        let reverse = fx == Some(15);
+
+        let stutter_period_samples = match fx {
+            Some(1) => {
+                // loop 16: 1 whole beat
+                let secs = 60.0 / bpm;
+                Some((secs * SAMPLE_RATE) as u32)
+            }
+            Some(2) => {
+                // loop 12: triplet beat (1/3 of a bar = 1 beat in 3/4)
+                let secs = 60.0 / (bpm * 3.0 / 2.0);
+                Some((secs * SAMPLE_RATE) as u32)
+            }
+            Some(3) => {
+                // loop short: 1/2 step
+                let secs = 60.0 / (bpm * 8.0);
+                Some((secs * SAMPLE_RATE) as u32)
+            }
+            Some(4) => {
+                // loop shorter: 1/4 step
+                let secs = 60.0 / (bpm * 16.0);
+                Some((secs * SAMPLE_RATE) as u32)
+            }
+            Some(9) => {
+                // stutter 4: 1 step (1/16 note)
+                let secs = 60.0 / (bpm * 4.0);
+                Some((secs * SAMPLE_RATE) as u32)
+            }
+            Some(10) => {
+                // stutter 3: triplet step (1/12 note)
+                let secs = 60.0 / (bpm * 12.0);
+                Some((secs * SAMPLE_RATE) as u32)
+            }
+            _ => None,
+        };
+
+        let pitch_mult = match fx {
+            Some(7) => 2.0,  // octave up
+            Some(8) => 0.5,  // octave down
+            _ => 1.0,
+        };
+
+        // Unison: trigger a second voice with slight detune
+        let (is_unison, unison_detune) = match fx {
+            Some(5) => (true, 7.0),   // unison: +7 cents
+            Some(6) => (true, -7.0),  // unison low: -7 cents
+            _ => (false, 0.0),
+        };
+
+        (reverse, stutter_period_samples, pitch_mult, is_unison, unison_detune)
     }
 
     fn cycle_bpm_preset(&mut self) {
