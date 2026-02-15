@@ -190,6 +190,12 @@ impl Middle {
                 self.state.sounds[self.state.selected_sound as usize] = SoundSlot::default();
                 vec![]
             }
+            InputEvent::ClearTrack => {
+                let pattern_idx = self.state.selected_pattern as usize;
+                let sound_idx = self.state.selected_sound as usize;
+                self.state.patterns[pattern_idx].tracks[sound_idx] = Default::default();
+                vec![]
+            }
             InputEvent::TriggerPad(n) => {
                 let pitch = Self::pad_to_major_scale_pitch(n);
                 self.trigger_sound_with_pitch(self.state.selected_sound, Some(pitch))
