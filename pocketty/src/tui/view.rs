@@ -39,7 +39,19 @@ const LCD_ART: &str = r#"
 ⠀⠀⠀⠀⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"#;
 
 pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: bool) {
-    // Center device in terminal
+    // footer at bottom of terminal
+    let main_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(1),  // footer row at bottom of terminal
+        ])
+        .split(area);
+
+    let device_area = main_chunks[0];
+    let footer_area = main_chunks[1];
+
+    // center device in terminal
     let h = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -47,7 +59,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: boo
             Constraint::Length(DEVICE_W),
             Constraint::Min(0),
         ])
-        .split(area);
+        .split(device_area);
 
     let v = Layout::default()
         .direction(Direction::Vertical)
@@ -58,15 +70,15 @@ pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: boo
         ])
         .split(h[1]);
 
-    let device_area = v[1];
+    let device_rect = v[1];
 
     let border = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(MID));
 
-    let inner = border.inner(device_area);
-    frame.render_widget(border, device_area);
+    let inner = border.inner(device_rect);
+    frame.render_widget(border, device_rect);
 
     let rows = Layout::default()
         .direction(Direction::Vertical)
@@ -74,18 +86,16 @@ pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: boo
             Constraint::Length(2),  // title
             Constraint::Length(14), // LCD screen (art + text)
             Constraint::Length(5),  // controls: buttons + knobs
-            Constraint::Length(1),  // spacer
             Constraint::Length(16), // pad grid: 4 rows × 4 lines each
-            Constraint::Length(1),  // footer
         ])
         .split(inner);
 
     draw_title_gap(frame, rows[0]);
     draw_screen(frame, rows[1], state);
     draw_controls_row(frame, rows[2], state);
-    // rows[3] = spacer — intentionally blank
-    draw_pad_area(frame, rows[4], state, blink_on);
-    draw_footer(frame, rows[5]);
+    draw_pad_area(frame, rows[3], state, blink_on);
+
+    draw_footer(frame, footer_area);
 }
 
 fn draw_title_gap(frame: &mut Frame, area: Rect) {
@@ -135,11 +145,9 @@ fn draw_screen(frame: &mut Frame, area: Rect, state: &DisplayState) {
         format!(" ║{}{}║", s, " ".repeat(p))
     };
 
-    // Build the LCD: border + art + text + border
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(Span::styled(top_border, sb)));
 
-    // Art lines (trimmed to fit inside LCD border)
     let art_lines: Vec<&str> = LCD_ART.trim().lines().collect();
     let max_art = h.saturating_sub(5); // leave room for border(2) + text(3)
     for art_line in art_lines.iter().take(max_art) {
