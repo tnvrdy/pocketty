@@ -370,14 +370,16 @@ fn draw_side_btn(frame: &mut Frame, area: Rect, sym: &str, label: &str, key: &st
 
 fn draw_footer(frame: &mut Frame, area: Rect) {
     let line = Line::from(vec![
-        Span::styled("(esc)", Style::default().fg(DIM)),
-        Span::styled("quit ", Style::default().fg(MID)),
-        Span::styled("(0)", Style::default().fg(DIM)),
-        Span::styled("clr ", Style::default().fg(MID)),
         Span::styled("(i)", Style::default().fg(DIM)),
-        Span::styled("in ", Style::default().fg(MID)),
+        Span::styled("switch input | ", Style::default().fg(MID)),
+        Span::styled("(yy)", Style::default().fg(DIM)),
+        Span::styled("switch controls | ", Style::default().fg(MID)),
         Span::styled("(p)", Style::default().fg(DIM)),
-        Span::styled("wav", Style::default().fg(MID)),
+        Span::styled("save song | ", Style::default().fg(MID)),
+        Span::styled("(0)", Style::default().fg(DIM)),
+        Span::styled("clr track | ", Style::default().fg(MID)),
+        Span::styled("(esc)", Style::default().fg(DIM)),
+        Span::styled("quit", Style::default().fg(MID)),
     ]);
 
     frame.render_widget(
