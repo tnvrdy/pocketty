@@ -331,6 +331,8 @@ impl Middle {
                 gain,
                 pitch,
                 effect_chain,
+                reverse: false,
+                stutter_period_samples: None,
             }));
         }
     }
@@ -505,6 +507,8 @@ impl Middle {
             gain,
             pitch,
             effect_chain,
+            reverse: false,
+            stutter_period_samples: None,
         })]
     }
 
