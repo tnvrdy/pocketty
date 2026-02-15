@@ -56,18 +56,31 @@ fn run() -> anyhow::Result<()> {
     let tick_rate = std::time::Duration::from_millis(16); // ~60fps
     let mut last_tick = Instant::now();
     let blink_start = Instant::now();
+    let mut tui_state = tui::mode::TuiState::default();
 
     loop {
         // Always update blink and UI at the tick rate
         let blink_on = (blink_start.elapsed().as_millis() / 250) % 2 == 0;
         let ds = middle.display_state().clone();
+
+        tui_state.playing = ds.playing;
+        tui_state.write_mode = ds.write_mode;
+        tui_state.param_page = ds.param_page;
+
         term.draw(|frame| {
             tui::view::render(frame, frame.area(), &ds, blink_on);
         })?;
 
-        if let Some(event) = tui::input::poll_input(tick_rate)? {
+        let events = tui::input::poll_input(tick_rate, &mut tui_state)?;
+        for event in events {
             if event == InputEvent::Quit {
-                break;
+                // save before quitting
+                if let Err(e) = persistence::save_project(&project_dir, &middle.state) {
+                    eprintln!("Warning: could not save project: {}", e);
+                }
+                drop(term);
+                drop(audio);
+                return Ok(());
             }
             let cmds = middle.handle_input(event);
             for cmd in cmds {
@@ -82,13 +95,7 @@ fn run() -> anyhow::Result<()> {
             audio.send(cmd);
         }
     }
-
-    if let Err(e) = persistence::save_project(&project_dir, &middle.state) {
-        eprintln!("Warning: could not save project: {}", e);
-    }
-
-    drop(term);
-    drop(audio);
+    #[allow(unreachable_code)]
     Ok(())
 }
 
