@@ -50,14 +50,6 @@ impl Middle {
 
     pub fn handle_input(&mut self, event: InputEvent) -> Vec<AudioCommand> {
         match event {
-            InputEvent::GridDown(n) => self.on_grid_down(n),
-            InputEvent::GridUp(n) => {
-                if (n as usize) < NUM_PADS {
-                    self.held.grid[n as usize] = false;
-                }
-                vec![]
-            }
-
             InputEvent::SoundDown => { self.held.sound = true; vec![] }
             InputEvent::SoundUp => { self.held.sound = false; vec![] }
 
@@ -128,9 +120,6 @@ impl Middle {
                 self.cycle_bpm_preset();
                 vec![]
             }
-
-            InputEvent::KnobTurnA(delta) => self.on_knob_a(delta),
-            InputEvent::KnobTurnB(delta) => self.on_knob_b(delta),
 
             // semantic grid events resolved and sent by tui
 
@@ -484,181 +473,6 @@ impl Middle {
         if (slot as usize) < self.state.sounds.len() {
             self.state.sounds[slot as usize] = SoundSlot::default();
         }
-    }
-
-    fn on_grid_down(&mut self, n: u8) -> Vec<AudioCommand> {
-        let idx = n as usize;
-        if idx >= NUM_PADS {
-            return vec![];
-        }
-        self.held.grid[idx] = true;
-        if self.held.sound {
-            self.state.selected_sound = n;
-            return vec![];
-        }
-
-        // pattern chaining doesn't do anything now, but will
-        if self.held.pattern {
-            if self.playing {
-                self.state.pattern_chain.push(n);
-            } else {
-                self.state.selected_pattern = n;
-            }
-            return vec![];
-        }
-
-        if self.held.bpm { // bpm and volume macro
-            self.state.master_volume = n + 1; // 1-16
-            return vec![];
-        }
-
-        // fx, untested
-        if self.held.fx && self.playing {
-            if n == 15 {
-                // fx 16 = clear effects
-                self.active_rt_effect = None;
-                if self.write_mode {
-                    let pi = self.state.selected_pattern as usize;
-                    let si = self.current_step as usize;
-                    for track in &mut self.state.patterns[pi].tracks {
-                        track.steps[si].effect = None;
-                    }
-                }
-            } else {
-                let fx_num = n + 1; // 1-15
-                self.active_rt_effect = Some(fx_num);
-                if self.write_mode {
-                    // Save effect to current step for selected sound
-                    let pi = self.state.selected_pattern as usize;
-                    let sound_idx = self.state.selected_sound as usize;
-                    let si = self.current_step as usize;
-                    self.state.patterns[pi].tracks[sound_idx].steps[si].effect =
-                        Some(fx_num);
-                }
-            }
-            return vec![];
-        }
-
-        // Placeholder for eventual mic/screen recording
-        if self.held.record {
-            // Record + Sound = delete current sound
-            if self.held.sound {
-                self.state.sounds[self.state.selected_sound as usize] = SoundSlot::default();
-                return vec![];
-            }
-            return vec![];
-        }
-
-        if self.write_mode && !self.playing {
-            let pi = self.state.selected_pattern as usize;
-            let sound_idx = self.state.selected_sound as usize;
-            let step = &mut self.state.patterns[pi].tracks[sound_idx].steps[idx];
-            step.active = !step.active;
-            return vec![];
-        }
-
-        // Live recording (rhythm + pitch)
-        if self.held.write_held && self.playing {
-            let quantized_step = self.quantize_to_nearest_step();
-            let pi = self.state.selected_pattern as usize;
-            let sound_idx = self.state.selected_sound as usize;
-
-            // self.state.patterns[pi].tracks[sound_idx].steps[quantized_step].active = true;
-            // // Also trigger the sound immediately
-            // return self.trigger_sound(self.state.selected_sound);
-            
-            let pitch_mult = Self::pad_to_major_scale_pitch(n);
-            let step = &mut self.state.patterns[pi].tracks[sound_idx].steps[quantized_step];
-            step.active = true;
-            step.pitch_lock = Some(pitch_mult);
-            // Also trigger the sound immediately at the recorded pitch
-            return self.trigger_sound_with_pitch(self.state.selected_sound, Some(pitch_mult));
-        }
-
-        // melodic style is default for all sounds
-        let pitch_mult = Self::pad_to_major_scale_pitch(n);
-        self.trigger_sound_with_pitch(self.state.selected_sound, Some(pitch_mult))
-    }
-
-    fn on_knob_a(&mut self, delta: f32) -> Vec<AudioCommand> {
-        if self.held.bpm { // swing
-            self.state.swing = (self.state.swing + delta).clamp(0.0, 1.0);
-            return vec![];
-        }
-
-        if self.held.write_held && self.playing { // pitch locking
-            let pi = self.state.selected_pattern as usize;
-            let sound_idx = self.state.selected_sound as usize;
-            let si = self.current_step as usize;
-            let sound = &self.state.sounds[sound_idx];
-            let step = &mut self.state.patterns[pi].tracks[sound_idx].steps[si];
-            let current = step.pitch_lock.unwrap_or(sound.pitch);
-            step.pitch_lock = Some((current + delta * 1.5).clamp(0.5, 2.0));
-            return vec![];
-        }
-
-        // adjust param page by default
-        let sound = &mut self.state.sounds[self.state.selected_sound as usize];
-        match self.param_page {
-            ParamPage::Tone => {
-                sound.pitch = (sound.pitch + delta * 1.5).clamp(0.5, 2.0);
-            }
-            ParamPage::Filter => {
-                let factor = if delta > 0.0 { 1.1 } else { 0.9 };
-                sound.filter_cutoff = (sound.filter_cutoff * factor).clamp(20.0, 20000.0);
-            }
-            ParamPage::Trim => {
-                let max = sound.buffer_len.saturating_sub(1);
-                let step_size = (max as f32 * delta.abs()).max(1.0) as usize;
-                if delta > 0.0 {
-                    sound.trim_start = (sound.trim_start + step_size).min(max);
-                } else {
-                    sound.trim_start = sound.trim_start.saturating_sub(step_size);
-                }
-                // clamping length so we don't exceed buffer length
-                let remaining = sound.buffer_len.saturating_sub(sound.trim_start);
-                sound.length = sound.length.min(remaining);
-            }
-        }
-        vec![]
-    }
-
-    fn on_knob_b(&mut self, delta: f32) -> Vec<AudioCommand> {
-        if self.held.bpm {// bpm
-            self.state.bpm = (self.state.bpm + delta * 180.0).clamp(60.0, 240.0);
-            return vec![];
-        }
-
-        if self.held.write_held && self.playing { // gain locking
-            let pi = self.state.selected_pattern as usize;
-            let sound_idx = self.state.selected_sound as usize;
-            let si = self.current_step as usize;
-            let sound = &self.state.sounds[sound_idx];
-            let step = &mut self.state.patterns[pi].tracks[sound_idx].steps[si];
-            let current = step.gain_lock.unwrap_or(sound.gain);
-            step.gain_lock = Some((current + delta).clamp(0.0, 1.0));
-            return vec![];
-        }
-
-        let sound = &mut self.state.sounds[self.state.selected_sound as usize];
-        match self.param_page {
-            ParamPage::Tone => {
-                sound.gain = (sound.gain + delta).clamp(0.0, 1.0);
-            }
-            ParamPage::Filter => {
-                sound.filter_resonance = (sound.filter_resonance + delta).clamp(0.0, 1.0);
-            }
-            ParamPage::Trim => {
-                let max = sound.buffer_len.saturating_sub(sound.trim_start);
-                let step_size = (max as f32 * delta.abs()).max(1.0) as usize;
-                if delta > 0.0 {
-                    sound.length = (sound.length + step_size).min(max);
-                } else {
-                    sound.length = sound.length.saturating_sub(step_size).max(1);
-                }
-            }
-        }
-        vec![]
     }
 
     fn pad_to_major_scale_pitch(pad_index: u8) -> f32 {
