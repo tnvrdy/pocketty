@@ -14,6 +14,7 @@
 //   b             //  RecordDown / RecordUp
 //   y             //  FxDown / FxUp
 //   n             //  BpmDown / BpmUp
+//   0             //  ClearTrack (clears current sound's track (i.e steps) so you can record over it)
 //
 // Knobs:
 //   [ / ]         //  KnobTurnA(-0.05 or 0.05, or whatever other offset we decide on)
@@ -91,6 +92,9 @@ pub enum InputEvent {
     // knobs
     KnobTurnA(f32),
     KnobTurnB(f32),
+
+    // clear current sound's track in current pattern (0 key)
+    ClearTrack,
 
     // quit button (esc)
     Quit,

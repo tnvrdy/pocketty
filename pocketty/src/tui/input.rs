@@ -14,6 +14,7 @@ pub fn poll_input(timeout: Duration) -> anyhow::Result<Option<InputEvent>> {
         let ev = match key.code {
             KeyCode::Esc => Some(InputEvent::Quit),
             KeyCode::Char(' ') => Some(InputEvent::PlayPress),
+            KeyCode::Char('0') => Some(InputEvent::ClearTrack),
 
             // grid of a track (lowercase = down):
             // 1 2 3 4

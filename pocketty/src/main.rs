@@ -58,12 +58,13 @@ fn run() -> anyhow::Result<()> {
     let blink_start = Instant::now();
 
     loop {
+        // Always update blink and UI at the tick rate
         let blink_on = (blink_start.elapsed().as_millis() / 250) % 2 == 0;
         let ds = middle.display_state().clone();
         term.draw(|frame| {
             tui::view::render(frame, frame.area(), &ds, blink_on);
         })?;
-        
+
         if let Some(event) = tui::input::poll_input(tick_rate)? {
             if event == InputEvent::Quit {
                 break;

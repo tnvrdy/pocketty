@@ -129,6 +129,14 @@ impl Middle {
                 vec![]
             }
 
+            InputEvent::ClearTrack => {
+                // Clear the currently selected sound's track in the current pattern
+                let pi = self.state.selected_pattern as usize;
+                let sound_idx = self.state.selected_sound as usize;
+                self.state.patterns[pi].tracks[sound_idx] = Default::default();
+                vec![]
+            }
+
             InputEvent::KnobTurnA(delta) => self.on_knob_a(delta),
             InputEvent::KnobTurnB(delta) => self.on_knob_b(delta),
 
@@ -186,7 +194,9 @@ impl Middle {
                 * (self.state.master_volume as f32 / 16.0);
             let pitch = step.pitch_lock.unwrap_or(sound.pitch);
 
-            let effect_chain = self.build_effect_chain(sound, step.effect);
+            // Real-time effect (y + pad) takes priority over per-step saved effect
+            let fx = self.active_rt_effect.or(step.effect);
+            let effect_chain = self.build_effect_chain(sound, fx);
 
             commands.push(AudioCommand::Trigger(TriggerParams {
                 sample_id,
@@ -410,14 +420,22 @@ impl Middle {
             return vec![];
         }
 
-        // Live recording
+        // Live recording (rhythm + pitch)
         if self.held.write_held && self.playing {
             let quantized_step = self.quantize_to_nearest_step();
             let pi = self.state.selected_pattern as usize;
             let sound_idx = self.state.selected_sound as usize;
-            self.state.patterns[pi].tracks[sound_idx].steps[quantized_step].active = true;
-            // Also trigger the sound immediately
-            return self.trigger_sound(self.state.selected_sound);
+
+            // self.state.patterns[pi].tracks[sound_idx].steps[quantized_step].active = true;
+            // // Also trigger the sound immediately
+            // return self.trigger_sound(self.state.selected_sound);
+            
+            let pitch_mult = Self::pad_to_major_scale_pitch(n);
+            let step = &mut self.state.patterns[pi].tracks[sound_idx].steps[quantized_step];
+            step.active = true;
+            step.pitch_lock = Some(pitch_mult);
+            // Also trigger the sound immediately at the recorded pitch
+            return self.trigger_sound_with_pitch(self.state.selected_sound, Some(pitch_mult));
         }
 
         // melodic style is default for all sounds
@@ -544,19 +562,34 @@ impl Middle {
     }
 
     fn build_effect_chain(&self, _sound: &SoundSlot, fx: Option<u8>) -> Vec<EffectSpec> {
-        // For now nothing, but here are the PO-33 effects for reference:
-        // map fx indices to EffectSpec variants here:
-        //   1-4: Loop variants
-        //   5-6: Unison
-        //   7: octave up (handle via pitch, not effect chain)
-        //   8: octave down (handle via pitch, not effect chain)
-        //   9-10: Stutter { period }
-        //   11-12: Scratch
+        // PO-33 effect map for reference (not all implemented yet):
+        //   1-4: Loop variants (not implemented)
+        //   5-6: Unison (not implemented)
+        //   7: octave up (handled via pitch in advance_step, not effect chain)
+        //   8: octave down (handled via pitch in advance_step, not effect chain)
+        //   9-10: Stutter { period } (not implemented)
+        //   11-12: Scratch (not implemented)
         //   13: 6/8 quantize (sequencer-level, not effect chain)
         //   14: retrigger pattern (sequencer-level)
-        //   15: reverse
-        let _ = fx;
-        vec![]
+        //   15: reverse (not implemented)
+        //
+        // Current mapping using available effects:
+        //   1: Distortion (light)
+        //   2: Distortion (medium)
+        //   3: Distortion (heavy)
+        //   4: Bitcrusher (light)
+        //   5: Bitcrusher (medium)
+        //   6: Bitcrusher (heavy)
+        //   7-15: not yet wired to audio effects
+        match fx {
+            Some(1) => vec![EffectSpec::Distortion { drive: 0.3 }],
+            Some(2) => vec![EffectSpec::Distortion { drive: 0.6 }],
+            Some(3) => vec![EffectSpec::Distortion { drive: 1.0 }],
+            Some(4) => vec![EffectSpec::Bitcrusher { levels: 256 }],
+            Some(5) => vec![EffectSpec::Bitcrusher { levels: 32 }],
+            Some(6) => vec![EffectSpec::Bitcrusher { levels: 8 }],
+            _ => vec![],
+        }
     }
 
     fn cycle_bpm_preset(&mut self) {
