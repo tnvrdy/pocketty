@@ -1,50 +1,66 @@
-use crate::shared::{PadId, UiAction};
-use crossterm::event::{Event, KeyCode, KeyEventKind};
+use std::time::Duration;
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crate::shared::InputEvent;
 
-pub fn read_action() -> anyhow::Result<UiAction> {
-    loop { 
-        match crossterm::event::read()? {
-            Event::Key(k) if k.kind == KeyEventKind::Press => {
-                match k.code {
-                    KeyCode::Esc => return Ok(UiAction::Quit),
-                    KeyCode::Char(c) => {
-                        let c = c.to_ascii_lowercase();
-                        if let Some(pad) = char_to_pad(c) {
-                            return Ok(UiAction::PadDown(pad)); // return paddown uiaction
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            _ => {}
-        }
+pub fn poll_input(timeout: Duration) -> anyhow::Result<Option<InputEvent>> {
+    if !event::poll(timeout)? {
+        return Ok(None);
     }
-}
 
-fn char_to_pad(c: char) -> Option<PadId> {
-    // keypad:
-    // 1234
-    //  qwer
-    //   asdf
-    //    zxcv
-    let idx = match c { // match keypresses to track's array indices
-        '1' => 0,
-        '2' => 1,
-        '3' => 2,
-        '4' => 3,
-        'q' => 4,
-        'w' => 5,
-        'e' => 6,
-        'r' => 7,
-        'a' => 8,
-        's' => 9,
-        'd' => 10,
-        'f' => 11,
-        'z' => 12,
-        'x' => 13,
-        'c' => 14,
-        'v' => 15,
-        _ => return None,
-    };
-    Some(PadId(idx as u8)) // cast to u8 to satisfy PadId type
+    if let Event::Key(key) = event::read()? {
+        if key.kind != KeyEventKind::Press {
+            return Ok(None);
+        }
+        let ev = match key.code {
+            KeyCode::Esc => Some(InputEvent::Quit),
+            KeyCode::Char(' ') => Some(InputEvent::PlayPress),
+
+            // grid of a track (lowercase = down):
+            // 1 2 3 4
+            //  q w e r
+            //   a s d f
+            //    z x c v
+            KeyCode::Char('1') => Some(InputEvent::GridDown(0)),
+            KeyCode::Char('2') => Some(InputEvent::GridDown(1)),
+            KeyCode::Char('3') => Some(InputEvent::GridDown(2)),
+            KeyCode::Char('4') => Some(InputEvent::GridDown(3)),
+            KeyCode::Char('q') => Some(InputEvent::GridDown(4)),
+            KeyCode::Char('w') => Some(InputEvent::GridDown(5)),
+            KeyCode::Char('e') => Some(InputEvent::GridDown(6)),
+            KeyCode::Char('r') => Some(InputEvent::GridDown(7)),
+            KeyCode::Char('a') => Some(InputEvent::GridDown(8)),
+            KeyCode::Char('s') => Some(InputEvent::GridDown(9)),
+            KeyCode::Char('d') => Some(InputEvent::GridDown(10)),
+            KeyCode::Char('f') => Some(InputEvent::GridDown(11)),
+            KeyCode::Char('z') => Some(InputEvent::GridDown(12)),
+            KeyCode::Char('x') => Some(InputEvent::GridDown(13)),
+            KeyCode::Char('c') => Some(InputEvent::GridDown(14)),
+            KeyCode::Char('v') => Some(InputEvent::GridDown(15)),
+
+            // modifier buttons (lowercase = down, shifted = up)
+            KeyCode::Char('g') => Some(InputEvent::SoundDown),
+            KeyCode::Char('G') => Some(InputEvent::SoundUp),
+            KeyCode::Char('h') => Some(InputEvent::PatternDown),
+            KeyCode::Char('H') => Some(InputEvent::PatternUp),
+            KeyCode::Char('t') => Some(InputEvent::WriteDown),
+            KeyCode::Char('T') => Some(InputEvent::WriteUp),
+            KeyCode::Char('b') => Some(InputEvent::RecordDown),
+            KeyCode::Char('B') => Some(InputEvent::RecordUp),
+            KeyCode::Char('y') => Some(InputEvent::FxDown),
+            KeyCode::Char('Y') => Some(InputEvent::FxUp),
+            KeyCode::Char('n') => Some(InputEvent::BpmDown),
+            KeyCode::Char('N') => Some(InputEvent::BpmUp),
+
+            // knobs
+            KeyCode::Char('[') => Some(InputEvent::KnobTurnA(-0.05)),
+            KeyCode::Char(']') => Some(InputEvent::KnobTurnA(0.05)),
+            KeyCode::Char('-') => Some(InputEvent::KnobTurnB(-0.05)),
+            KeyCode::Char('=') => Some(InputEvent::KnobTurnB(0.05)),
+
+            _ => None,
+        };
+        return Ok(ev);
+    }
+
+    Ok(None)
 }
