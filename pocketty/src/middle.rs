@@ -266,6 +266,145 @@ impl Middle {
                 vec![]
             }
 
+            // ── Semantic grid events (resolved by TUI) ──────────────
+
+            InputEvent::SelectSound(n) => {
+                self.state.selected_sound = n;
+                vec![]
+            }
+            InputEvent::SelectPattern(n) => {
+                self.state.selected_pattern = n;
+                vec![]
+            }
+            InputEvent::ChainPattern(n) => {
+                self.state.pattern_chain.push(n);
+                vec![]
+            }
+            InputEvent::SetVolume(n) => {
+                self.state.master_volume = n; // 1-16
+                vec![]
+            }
+            InputEvent::ToggleStep(n) => {
+                let pi = self.state.selected_pattern as usize;
+                let si = self.state.selected_sound as usize;
+                self.state.patterns[pi].tracks[si].steps[n as usize].active ^= true;
+                vec![]
+            }
+            InputEvent::LiveRecordStep(n) => {
+                let quantized_step = self.quantize_to_nearest_step();
+                let pi = self.state.selected_pattern as usize;
+                let si = self.state.selected_sound as usize;
+                self.state.patterns[pi].tracks[si].steps[quantized_step].active = true;
+                let _ = n; // pad number used by TUI for resolution; we quantize here
+                self.trigger_sound(self.state.selected_sound)
+            }
+            InputEvent::SetRealtimeEffect(fx_num) => {
+                self.active_rt_effect = Some(fx_num);
+                if self.write_mode {
+                    let pi = self.state.selected_pattern as usize;
+                    let sound_idx = self.state.selected_sound as usize;
+                    let si = self.current_step as usize;
+                    self.state.patterns[pi].tracks[sound_idx].steps[si].effect =
+                        Some(fx_num);
+                }
+                vec![]
+            }
+            InputEvent::ClearRealtimeEffect => {
+                self.active_rt_effect = None;
+                if self.write_mode {
+                    let pi = self.state.selected_pattern as usize;
+                    let si = self.current_step as usize;
+                    for track in &mut self.state.patterns[pi].tracks {
+                        track.steps[si].effect = None;
+                    }
+                }
+                vec![]
+            }
+            InputEvent::DeleteSound => {
+                self.state.sounds[self.state.selected_sound as usize] = SoundSlot::default();
+                vec![]
+            }
+            InputEvent::TriggerPad(n) => {
+                let pitch = Self::pad_to_major_scale_pitch(n);
+                self.trigger_sound_with_pitch(self.state.selected_sound, Some(pitch))
+            }
+
+            // ── Semantic knob events (resolved by TUI) ──────────────
+
+            InputEvent::AdjustSwing(delta) => {
+                self.state.swing = (self.state.swing + delta).clamp(0.0, 1.0);
+                vec![]
+            }
+            InputEvent::AdjustBpm(delta) => {
+                self.state.bpm = (self.state.bpm + delta * 180.0).clamp(60.0, 240.0);
+                vec![]
+            }
+            InputEvent::PitchLockStep(delta) => {
+                let pi = self.state.selected_pattern as usize;
+                let sound_idx = self.state.selected_sound as usize;
+                let si = self.current_step as usize;
+                let sound = &self.state.sounds[sound_idx];
+                let step = &mut self.state.patterns[pi].tracks[sound_idx].steps[si];
+                let current = step.pitch_lock.unwrap_or(sound.pitch);
+                step.pitch_lock = Some((current + delta * 1.5).clamp(0.5, 2.0));
+                vec![]
+            }
+            InputEvent::GainLockStep(delta) => {
+                let pi = self.state.selected_pattern as usize;
+                let sound_idx = self.state.selected_sound as usize;
+                let si = self.current_step as usize;
+                let sound = &self.state.sounds[sound_idx];
+                let step = &mut self.state.patterns[pi].tracks[sound_idx].steps[si];
+                let current = step.gain_lock.unwrap_or(sound.gain);
+                step.gain_lock = Some((current + delta).clamp(0.0, 1.0));
+                vec![]
+            }
+            InputEvent::AdjustPitch(delta) => {
+                let sound = &mut self.state.sounds[self.state.selected_sound as usize];
+                sound.pitch = (sound.pitch + delta * 1.5).clamp(0.5, 2.0);
+                vec![]
+            }
+            InputEvent::AdjustGain(delta) => {
+                let sound = &mut self.state.sounds[self.state.selected_sound as usize];
+                sound.gain = (sound.gain + delta).clamp(0.0, 1.0);
+                vec![]
+            }
+            InputEvent::AdjustFilterCutoff(delta) => {
+                let sound = &mut self.state.sounds[self.state.selected_sound as usize];
+                let factor = if delta > 0.0 { 1.1 } else { 0.9 };
+                sound.filter_cutoff = (sound.filter_cutoff * factor).clamp(20.0, 20000.0);
+                vec![]
+            }
+            InputEvent::AdjustFilterResonance(delta) => {
+                let sound = &mut self.state.sounds[self.state.selected_sound as usize];
+                sound.filter_resonance = (sound.filter_resonance + delta).clamp(0.0, 1.0);
+                vec![]
+            }
+            InputEvent::AdjustTrimStart(delta) => {
+                let sound = &mut self.state.sounds[self.state.selected_sound as usize];
+                let max = sound.buffer_len.saturating_sub(1);
+                let step_size = (max as f32 * delta.abs()).max(1.0) as usize;
+                if delta > 0.0 {
+                    sound.trim_start = (sound.trim_start + step_size).min(max);
+                } else {
+                    sound.trim_start = sound.trim_start.saturating_sub(step_size);
+                }
+                let remaining = sound.buffer_len.saturating_sub(sound.trim_start);
+                sound.length = sound.length.min(remaining);
+                vec![]
+            }
+            InputEvent::AdjustTrimLength(delta) => {
+                let sound = &mut self.state.sounds[self.state.selected_sound as usize];
+                let max = sound.buffer_len.saturating_sub(sound.trim_start);
+                let step_size = (max as f32 * delta.abs()).max(1.0) as usize;
+                if delta > 0.0 {
+                    sound.length = (sound.length + step_size).min(max);
+                } else {
+                    sound.length = sound.length.saturating_sub(step_size).max(1);
+                }
+                vec![]
+            }
+
             InputEvent::Quit => vec![],
         }
     }
