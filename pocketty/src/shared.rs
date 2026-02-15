@@ -94,8 +94,31 @@ pub enum InputEvent {
 
     // quit button (esc)
     Quit,
-}
 
+    // semantic grid events!! now resolving by tui and not sending keyevents to backend lol
+    SelectSound(u8), // held sound + grid press
+    SelectPattern(u8), // held pattern + grid press (stopped)
+    ChainPattern(u8), // held pattern + grid press (playing)
+    SetVolume(u8), // held bpm + grid press
+    ToggleStep(u8), // write_mode + grid press (stopped)
+    LiveRecordStep(u8), // held write + grid press (playing)
+    SetRealtimeEffect(u8), // held fx + grid press (playing)
+    ClearRealtimeEffect, // held fx + grid 16 (playing)
+    DeleteSound, // held record + held sound
+    TriggerPad(u8), // default: play pad melodically
+
+    // semantic knob events, again resolving by tui
+    AdjustSwing(f32), // held bpm + knob a
+    AdjustBpm(f32), // held bpm + knob b
+    PitchLockStep(f32), // held write + playing + knob a
+    GainLockStep(f32), // held write + playing + knob b
+    AdjustPitch(f32), // default knob a (tone page)
+    AdjustGain(f32), // default knob b (tone page)
+    AdjustFilterCutoff(f32), // default knob a (filter page)
+    AdjustFilterResonance(f32), // default knob b (filter page)
+    AdjustTrimStart(f32), // default knob a (trim page)
+    AdjustTrimLength(f32), // default knob b (trim page)
+}
 
 #[derive(Clone, Debug)]
 pub struct DisplayState {
