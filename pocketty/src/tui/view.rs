@@ -1,60 +1,34 @@
-use crate::shared::{DisplayState, LedState, STEPS_PER_PATTERN};
-use ratatui::style::Color;
+use crate::shared::DisplayState;
 use ratatui::layout::{Layout, Direction, Constraint, Rect};
 use ratatui::Frame;
 
-const BG: Color = Color::Black;
-const DARK: Color = Color::Rgb(60, 60, 60);
-const MED: Color = Color::Rgb(200, 140, 50);
-const HIGH: Color = Color::Rgb(255, 200, 80);
-const BLINK_ON: Color = Color::Rgb(255, 80, 40);
-const TEXT: Color = Color::Rgb(200, 200, 180);
-const BRIGHT: Color = Color::Rgb(255, 200, 80);
-
 const PAD_LABELS: [&str; 16] = [
-    "1", "2", "3", "4",
-    "Q", "W", "E", "R",
-    "A", "S", "D", "F",
-    "Z", "X", "C", "V",
+   "1", "2", "3", "4",
+   "Q", "W", "E", "R",
+   "A", "S", "D", "F",
+   "Z", "X", "C", "V",
 ];
 
-// main renderer
-pub fn render(frame: &mut Frame, ds: &DisplayState, blink_on: bool) {
-    // take in frame, display state, and blink on/off
-    // chunk into grid
-    // draw status screen
-    // draw pad grid
-    // draw knobs
+pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: bool) {
+   let sections = Layout::default()
+       .direction(Direction::Vertical)
+       .constraints([
+           Constraint::Length(6), // lcd screen
+           Constraint::Length(3), // mode buttons + knobs row
+           Constraint::Min(12), // pad grid + side buttons
+       ])
+       .split(area);
+
+   draw_screen(frame, sections[0], state);
+   draw_mode_row(frame, sections[1], state);
+   draw_keypad(frame, sections[2], state, blink_on);
 }
 
-fn draw_pad_grid(frame: &mut Frame, area: Rect, pads_lit: &[LedState; STEPS_PER_PATTERN], blink_on: bool) {
-    let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Ratio(1,4); 4])
-        .split(area);
+fn draw_screen(frame: &mut Frame, area: Rect, state: &DisplayState) {
+}
 
-    for row in 0..4 {
-        let cols = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Ratio(1,4); 4])
-            .split(rows[row]);
+fn draw_mode_row(frame: &mut Frame, area: Rect, state: &DisplayState) {
+}
 
-        for col in 0..4 {
-            let pad_i = row * 4 + col;
-            let lit = pads_lit[pad_i];
-
-            let (fg, bg) = match lit {
-                LedState::Off => (DARK, BG),
-                LedState::OnMedium => (MED, BG),
-                LedState::OnHigh => (HIGH, BG),
-                LedState::Blink => {
-                    if blink_on {
-                        (BG, BLINK_ON)
-                    } else {
-                        (DARK, BG)
-                    }
-                },
-            };
-        }
-    }
+fn draw_keypad(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: bool) {
 }
