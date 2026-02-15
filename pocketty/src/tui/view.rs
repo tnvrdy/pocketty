@@ -5,15 +5,15 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, BorderType, Paragraph};
 use ratatui::Frame;
 
-const DIM: Color = Color::Rgb(60, 60, 60);
-const MID: Color = Color::Rgb(120, 110, 90);
-const TEXT: Color = Color::Rgb(200, 200, 180);
-const ACCENT: Color = Color::Rgb(255, 200, 80);
-const LED_MED: Color = Color::Rgb(180, 140, 50);
-const LED_HI: Color = Color::Rgb(255, 220, 80);
-const LCD_FG: Color = Color::Rgb(140, 180, 100);
-const LCD_BRIGHT: Color = Color::Rgb(190, 230, 130);
-const LED_RED: Color = Color::Rgb(220, 60, 50); // dot lights up when button is active
+const DIM: Color = Color::Rgb(200, 175, 188);   // muted baby pink
+const MID: Color = Color::Rgb(220, 190, 200);   // muted baby pink
+const TEXT: Color = Color::Rgb(255, 220, 230);   // baby pink
+const ACCENT: Color = Color::Rgb(255, 230, 238); // baby pink (brighter, active)
+const LCD_FG: Color = Color::Rgb(230, 200, 210);
+const LCD_BRIGHT: Color = Color::Rgb(255, 225, 235);
+const LED_MED: Color = Color::Rgb(220, 55, 50);
+const LED_HI: Color = Color::Rgb(240, 50, 50);
+const LED_RED: Color = Color::Rgb(255, 50, 50); // bright red when button is active
 
 const PAD_LABELS: [&str; 16] = [
     "1", "2", "3", "4",
@@ -48,20 +48,14 @@ pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: boo
 
     let device_area = v[1];
 
-    // Outer device border — title on top border line
     let border = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(MID))
-        .title(Span::styled(
-            " pocketty ─ PO-33 ",
-            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
-        ));
+        .border_style(Style::default().fg(MID));
 
     let inner = border.inner(device_area);
     frame.render_widget(border, device_area);
 
-    // Vertical sections — gap, LCD, controls, spacer, grid, footer
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -74,11 +68,23 @@ pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: boo
         ])
         .split(inner);
 
+    draw_title_gap(frame, rows[0]);
     draw_screen(frame, rows[1], state);
     draw_controls_row(frame, rows[2], state);
     // rows[3] = spacer — intentionally blank
     draw_pad_area(frame, rows[4], state, blink_on);
     draw_footer(frame, rows[5]);
+}
+
+fn draw_title_gap(frame: &mut Frame, area: Rect) {
+    let line = Line::from(Span::styled(
+        "pocketty ─ PO-33",
+        Style::default().fg(TEXT),
+    ));
+    frame.render_widget(
+        Paragraph::new(line).alignment(Alignment::Center),
+        area,
+    );
 }
 
 fn draw_screen(frame: &mut Frame, area: Rect, state: &DisplayState) {
