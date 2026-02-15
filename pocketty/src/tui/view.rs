@@ -85,8 +85,8 @@ pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: boo
         .constraints([
             Constraint::Length(2),  // title
             Constraint::Length(14), // LCD screen (art + text)
-            Constraint::Length(5),  // controls: buttons + knobs
-            Constraint::Length(16), // pad grid: 4 rows × 4 lines each
+            Constraint::Length(6),  // controls: buttons + knobs
+            Constraint::Length(17), // pad grid: 4 rows × 4 lines each
         ])
         .split(inner);
 
