@@ -58,10 +58,6 @@ pub enum UiAction {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum InputEvent {
-    // grid buttons
-    GridDown(u8), // index 0-15
-    GridUp(u8),
-
     // "sound" button
     SoundDown,
     SoundUp,
@@ -88,10 +84,6 @@ pub enum InputEvent {
     // "bpm" button (n)
     BpmDown,
     BpmUp,
-
-    // knobs
-    KnobTurnA(f32),
-    KnobTurnB(f32),
 
     // clear current sound's track in current pattern (0 key)
     ClearTrack,
