@@ -38,6 +38,19 @@ const LCD_ART: &str = r#"
 ⠀⠀⠀⢧⣾⡶⠀⠀⠀⠀⠀⠀⠀⠀⠸⠤⢀⡀⣀⢸⣉⠇⠀⠀⠀⠀⠀⠈⡍⠈⠈⡇⠁⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"#;
 
+// heart removed for play-mode pulse
+const LCD_ART_NO_HEART: &str = r#"
+⠀⠀⣰⡿⠿⠿⢿⠆⠀    ⠀⠀⢀⣄⣀⠀⠀⠀⠀⠀⣀⡀⠀⠀⡊⠲⠉⢱⠀⠀⠀⢠⣤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⢀⣿⣇⠀⠂⣌⠆⠀     ⢹⠋⢉⡉⢳⣦⠀⠀⠀⢿⡿⠀⠀⠈⢀⣖⠁⠀⠀⠀⠈⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠈⠛⡻⢠⡴⠋⠢⡀⠀⠀⠀⠐⠯⣛⠀⠂⠀⢀⠄⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⡐⣹⣦⡟⡔⡑⠁⠀⠶⢠⠂⡄⠹⢞⠀⡔⠋⠀⠀⠀⠀⠀⠀⣀⣴⣿⣿⣿⣿⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⢱⣦⣛⠴⠂⠀⠠⠘⠒⠋⢰⢷⣲⠉⡉⠉⡆⠀⠀⠀⢴⡶⠀⠉⠉⢁⣼⣿⣯⠉⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⢨⣿⣿⣄⠀⠀⠀⠉⣍⣈⣉⠒⡚⠒⠰⠁⡇⠀⠀⠀⠀⠀⢀⣠⣴⣾⣿⣿⣿⣿⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⣿⡿⣿⠿⠦⠀⠀⠀⠀⠀⠀⠀⠘⣁⣁⡤⢷⠀⠀⣶⠄⠀⠀⠀⣉⣽⣿⣿⣿⣍⠙⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠈⠁⠂⢱⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⠀⢀⣆⣞⣲⠒⡄⠀⠐⠶⢿⣿⣿⣿⣿⣿⣿⣷⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⢧⣾⡶⠀⠀⠀⠀⠀⠀⠀⠀⠸⠤⢀⡀⣀⢸⣉⠇⠀⠀⠀⠀⠀⠈⡍⠈⠈⡇⠁⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"#;
+
 pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: bool) {
     // footer at bottom of terminal
     let main_chunks = Layout::default()
@@ -91,7 +104,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: boo
         .split(inner);
 
     draw_title_gap(frame, rows[0]);
-    draw_screen(frame, rows[1], state);
+    draw_screen(frame, rows[1], state, blink_on);
     draw_controls_row(frame, rows[2], state);
     draw_pad_area(frame, rows[3], state, blink_on);
 
@@ -109,7 +122,7 @@ fn draw_title_gap(frame: &mut Frame, area: Rect) {
     );
 }
 
-fn draw_screen(frame: &mut Frame, area: Rect, state: &DisplayState) {
+fn draw_screen(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: bool) {
     let h = area.height as usize;
     let w = area.width as usize;
     let iw = if w > 4 { w - 4 } else { 1 };
@@ -148,7 +161,15 @@ fn draw_screen(frame: &mut Frame, area: Rect, state: &DisplayState) {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(Span::styled(top_border, sb)));
 
-    let art_lines: Vec<&str> = LCD_ART.trim().lines().collect();
+    // pulse ehart to bpm in play mode
+    let art_source = if state.playing && blink_on {
+        LCD_ART
+    } else if state.playing && !blink_on {
+        LCD_ART_NO_HEART
+    } else {
+        LCD_ART
+    };
+    let art_lines: Vec<&str> = art_source.trim().lines().collect();
     let max_art = h.saturating_sub(5); // leave room for border(2) + text(3)
     for art_line in art_lines.iter().take(max_art) {
         // Truncate art to fit inside LCD width
