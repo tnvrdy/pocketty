@@ -6,18 +6,21 @@ use super::frame::StereoFrame;
 #[derive(Clone, Debug)]
 pub enum EffectSpec {
     Bitcrusher { levels: u32 },
+    Distortion { drive: f32 },
 }
 
 impl EffectSpec {
     pub fn to_effect(&self) -> Box<dyn Effect> {
         match self {
             EffectSpec::Bitcrusher { levels } => Box::new(Bitcrusher::new(*levels)),
+            EffectSpec::Distortion { drive } => Box::new(Distortion::new(*drive)),
         }
     }
 
     pub fn label(&self) -> String {
         match self {
             EffectSpec::Bitcrusher { levels } => format!("Bitcrush({})", levels),
+            EffectSpec::Distortion { drive } => format!("Distortion({})", drive),
         }
     }
 } 
@@ -26,6 +29,7 @@ pub trait Effect: Send {
     fn process(&mut self, buf: &mut [StereoFrame]);
 }
 
+//bitcrusher
 pub struct Bitcrusher {
     levels: f32,
 }
@@ -45,6 +49,29 @@ impl Effect for Bitcrusher {
         for f in buf.iter_mut() {
             f.left = (f.left.clamp(-1.0, 1.0) * scale).round() * inv;
             f.right = (f.right.clamp(-1.0, 1.0) * scale).round() * inv;
+        }
+    }
+}
+
+//distortion
+pub struct Distortion {
+    drive: f32,
+}
+
+impl Distortion {
+    pub fn new(drive: f32) -> Self {
+        Self { 
+            drive: drive.clamp(0.0, 1.0) as f32,
+        }
+    }
+}
+
+impl Effect for Distortion {
+    fn process(&mut self, buf: &mut [StereoFrame]) {
+        let pre_gain = 1.0 + self.drive * 10.0; 
+        for f in buf.iter_mut() {
+            f.left = (pre_gain * f.left.clamp(-1.0, 1.0)).tanh();
+            f.right = (pre_gain * f.right.clamp(-1.0, 1.0)).tanh();
         }
     }
 }
