@@ -59,8 +59,8 @@ pub fn render(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: boo
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(4),  // gap between top border and LCD
-            Constraint::Length(13), // LCD screen (art)
+            Constraint::Length(2),  // gap between top border and LCD (reduced for more screen height)
+            Constraint::Length(14), // LCD screen (art + text)
             Constraint::Length(5),  // controls: buttons + knobs
             Constraint::Length(1),  // spacer (gap before grid)
             Constraint::Length(16), // pad grid: 4 rows × 4 lines each
@@ -118,28 +118,36 @@ fn draw_screen(frame: &mut Frame, area: Rect, _state: &DisplayState) {
         .unwrap_or(0);
     let art_used: Vec<&str> = art_lines.get(start..).unwrap_or(&[]).to_vec();
 
-    let top_border = format!("╔{}╗", "═".repeat(content_w));
-    let bottom_border = format!("╚{}╝", "═".repeat(content_w));
+    let l1 = format!(
+        " {} {} {}  {:.0}bpm",
+        state.display_text, play, write, state.bpm
+    );
+    let l2 = format!(
+        " {:<5} {}:{:.2} {}:{:.2}",
+        page,
+        state.knob_a_label, state.knob_a_value,
+        state.knob_b_label, state.knob_b_value,
+    );
+    // let l3 = format!(
+    //     " snd:{:<2} pat:{:<2}",
+    //     state.selected_sound + 1, state.selected_pattern + 1,
+    // );
 
-    let mut lines = vec![Line::from(Span::styled(top_border.clone(), border_style))];
+    let pad_str = |s: &str| -> String {
+        let n = s.chars().count();
+        let p = if iw > n { iw - n } else { 0 };
+        format!(" ║{}{}║", s, " ".repeat(p))
+    };
 
-    for s in art_used.iter().take(content_h) {
-        let raw: String = s.chars().take(content_w).collect();
-        let pad_len = content_w.saturating_sub(raw.chars().count());
-        let row = format!("{}{}", raw, " ".repeat(pad_len));
-        lines.push(Line::from(vec![
-            Span::styled("║", border_style),
-            Span::styled(row, style),
-            Span::styled("║", border_style),
-        ]));
-    }
+    let mut lines = vec![
+        Line::from(Span::styled(top, sb)),
+        Line::from(Span::styled(pad_str(&l1), sh)),
+        Line::from(Span::styled(pad_str(&l2), sl)),
+    ];
 
-    for _ in art_used.len().min(content_h)..content_h {
-        lines.push(Line::from(vec![
-            Span::styled("║", border_style),
-            Span::styled(" ".repeat(content_w), style),
-            Span::styled("║", border_style),
-        ]));
+    let used = lines.len() + 1; // +1 for bottom border
+    for _ in 0..h.saturating_sub(used) {
+        lines.push(Line::from(Span::styled(empty_row.clone(), sb)));
     }
 
     lines.push(Line::from(Span::styled(bottom_border, border_style)));
