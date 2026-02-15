@@ -23,6 +23,8 @@ pub struct Middle {
     param_page: ParamPage,
     fx_down_at: Option<Instant>, // tap/hold detection
     active_rt_effect: Option<u8>, // active real-time effect while fx held
+    recording_armed: bool, // true between RecordDown and RecordUp
+    is_capturing: bool,    // true when engine is actively capturing audio (set from main loop)
     display: DisplayState,
 }
 
@@ -39,6 +41,8 @@ impl Middle {
             param_page: ParamPage::Tone,
             fx_down_at: None,
             active_rt_effect: None,
+            recording_armed: false,
+            is_capturing: false,
             display: Self::empty_display(),
         }
     }
@@ -47,6 +51,11 @@ impl Middle {
         let mut m = Self::new();
         m.state = state;
         m
+    }
+
+    /// Called from the main loop to update recording capture state from the engine.
+    pub fn set_capturing(&mut self, capturing: bool) {
+        self.is_capturing = capturing;
     }
 
     pub fn handle_input(&mut self, event: InputEvent) -> Vec<AudioCommand> {
@@ -96,6 +105,7 @@ impl Middle {
                 }
                 // Record alone = arm mic recording into selected sound slot
                 if !self.held.sound {
+                    self.recording_armed = true;
                     let sid = next_sample_id();
                     let slot = self.state.selected_sound as usize;
                     let sound = &mut self.state.sounds[slot];
@@ -110,6 +120,8 @@ impl Middle {
             }
             InputEvent::RecordUp => {
                 self.held.record = false;
+                self.recording_armed = false;
+                self.is_capturing = false;
                 vec![AudioCommand::StopRecording]
             }
 
@@ -528,11 +540,20 @@ impl Middle {
             format!("{:.0} BPM", self.state.bpm)
         };
 
+        let recording = if self.is_capturing {
+            RecordingDisplay::Capturing
+        } else if self.recording_armed {
+            RecordingDisplay::Armed
+        } else {
+            RecordingDisplay::Idle
+        };
+
         self.display = DisplayState {
             leds,
             playing_step,
             write_mode: self.write_mode,
             playing: self.playing,
+            recording,
             param_page: self.param_page,
             selected_sound: self.state.selected_sound,
             selected_pattern: self.state.selected_pattern,
@@ -551,6 +572,7 @@ impl Middle {
             playing_step: None,
             write_mode: false,
             playing: false,
+            recording: RecordingDisplay::Idle,
             param_page: ParamPage::Tone,
             selected_sound: 0,
             selected_pattern: 0,

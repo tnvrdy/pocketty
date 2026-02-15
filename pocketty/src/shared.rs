@@ -120,12 +120,20 @@ pub enum InputEvent {
     LockStepGainAt { step: u8, delta: f32 },  // gain lock
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RecordingDisplay {
+    Idle,
+    Armed,     // waiting for peak threshold — steady light
+    Capturing, // actively recording — blinking light
+}
+
 #[derive(Clone, Debug)]
 pub struct DisplayState {
     pub leds: [LedState; STEPS_PER_PATTERN],
     pub playing_step: Option<u8>, // if in sequence mode, which step is playing
     pub write_mode: bool,
     pub playing: bool, // whether we're in sequence mode and playing
+    pub recording: RecordingDisplay,
     pub param_page: ParamPage, // knob text
     pub selected_sound: u8, // current sound slot
     pub selected_pattern: u8, // current pattern slot

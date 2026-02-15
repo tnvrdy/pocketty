@@ -86,6 +86,8 @@ fn run() -> anyhow::Result<()> {
     loop {
         // Always update blink and UI at the tick rate
         let blink_on = (blink_start.elapsed().as_millis() / 250) % 2 == 0;
+        // Sync recording capture state from engine → middle → display
+        middle.set_capturing(audio.is_capturing());
         let ds = middle.display_state().clone();
 
         tui_state.playing = ds.playing;

@@ -1,3 +1,6 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use anyhow::Context;
 use crossbeam_channel::{Receiver, Sender};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -21,6 +24,7 @@ use engine::{CompletedRecording, Engine};
 pub struct AudioHandle {
     tx: Sender<AudioCommand>,
     completed_rx: Receiver<CompletedRecording>,
+    capturing_flag: Arc<AtomicBool>,
     _output_stream: cpal::Stream,
     _input_stream: Option<cpal::Stream>, // None when no mic available
 }
@@ -32,6 +36,11 @@ impl AudioHandle {
 
     pub fn poll_completed_recording(&self) -> Option<CompletedRecording> {
         self.completed_rx.try_recv().ok()
+    }
+
+    /// True when the engine has crossed the peak threshold and is actively capturing audio.
+    pub fn is_capturing(&self) -> bool {
+        self.capturing_flag.load(Ordering::Relaxed)
     }
 }
 
@@ -47,11 +56,13 @@ pub fn start_audio() -> anyhow::Result<AudioHandle> {
 
     let (input_tx, input_rx) = crossbeam_channel::bounded::<Vec<StereoFrame>>(2048);
     let (completed_tx, completed_rx) = crossbeam_channel::bounded::<CompletedRecording>(16);
+    let capturing_flag = Arc::new(AtomicBool::new(false));
 
     match config.sample_format() {
         cpal::SampleFormat::F32 => {
             let output_stream = build_output_stream_f32(
-                &device, &config.into(), rx, input_rx, completed_tx, channels,
+                &device, &config.into(), rx, input_rx, completed_tx,
+                channels, Arc::clone(&capturing_flag),
             )?;
             output_stream.play().context("failed to play output stream")?;
 
@@ -60,6 +71,7 @@ pub fn start_audio() -> anyhow::Result<AudioHandle> {
             Ok(AudioHandle {
                 tx,
                 completed_rx,
+                capturing_flag,
                 _output_stream: output_stream,
                 _input_stream: input_stream,
             })
@@ -77,8 +89,9 @@ fn build_output_stream_f32(
     input_rx: Receiver<Vec<StereoFrame>>,
     completed_tx: crossbeam_channel::Sender<CompletedRecording>,
     channels: usize,
+    capturing_flag: Arc<AtomicBool>,
 ) -> anyhow::Result<cpal::Stream> {
-    let mut engine = Engine::new();
+    let mut engine = Engine::new(capturing_flag);
     engine.set_input_rx(input_rx);
     engine.set_completed_tx(completed_tx);
 

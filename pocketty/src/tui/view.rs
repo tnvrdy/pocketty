@@ -1,4 +1,4 @@
-use crate::shared::{DisplayState, LedState};
+use crate::shared::{DisplayState, LedState, RecordingDisplay};
 use ratatui::layout::{Alignment, Layout, Direction, Constraint, Rect};
 use ratatui::style::{Color, Style, Modifier};
 use ratatui::text::{Line, Span};
@@ -244,7 +244,7 @@ fn draw_pad_area(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: 
     for c in 0..4 {
         draw_pad_col(frame, cols[c], c, state, blink_on);
     }
-    draw_side_col(frame, cols[4], state);
+    draw_side_col(frame, cols[4], state, blink_on);
 }
 
 fn draw_pad_col(frame: &mut Frame, area: Rect, col: usize, state: &DisplayState, blink_on: bool) {
@@ -299,13 +299,19 @@ fn pad_color(led: LedState, blink_on: bool) -> Color {
     }
 }
 
-fn draw_side_col(frame: &mut Frame, area: Rect, state: &DisplayState) {
+fn draw_side_col(frame: &mut Frame, area: Rect, state: &DisplayState, blink_on: bool) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(4); 4])
         .split(area);
 
-    draw_side_btn(frame, rows[0], "●", "rec", "b", false);
+    // Record button: steady when armed, blink when capturing
+    let (rec_active, rec_sym) = match state.recording {
+        RecordingDisplay::Idle => (false, "○"),
+        RecordingDisplay::Armed => (true, "●"),
+        RecordingDisplay::Capturing => (blink_on, if blink_on { "●" } else { "○" }),
+    };
+    draw_side_btn(frame, rows[0], rec_sym, "rec", "b", rec_active);
     draw_side_btn(frame, rows[1], "●", "fx", "y", false);
 
     let ps = if state.playing { "▶" } else { "■" };

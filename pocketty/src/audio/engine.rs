@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crossbeam_channel::{Receiver, Sender};
 
@@ -92,10 +94,11 @@ pub struct Engine {
     recording: RecordingState,
     input_rx: Option<Receiver<Vec<StereoFrame>>>,
     completed_tx: Option<Sender<CompletedRecording>>,
+    capturing_flag: Arc<AtomicBool>, // shared with AudioHandle for UI feedback
 }
 
 impl Engine {
-    pub fn new() -> Self {
+    pub fn new(capturing_flag: Arc<AtomicBool>) -> Self {
         Self {
             samples: HashMap::new(),
             active: Vec::new(),
@@ -103,6 +106,7 @@ impl Engine {
             recording: RecordingState::Idle,
             input_rx: None,
             completed_tx: None,
+            capturing_flag,
         }
     }
 
@@ -155,12 +159,14 @@ impl Engine {
                 }
             }
             AudioCommand::StartRecording { sample_id } => {
+                self.capturing_flag.store(false, Ordering::Relaxed);
                 self.recording = RecordingState::Armed {
                     sample_id,
                     pre_roll: PreRollRing::new(PRE_ROLL_FRAMES),
                 };
             }
             AudioCommand::StopRecording => {
+                self.capturing_flag.store(false, Ordering::Relaxed);
                 // Finalise whatever we have and register the sample
                 match std::mem::replace(&mut self.recording, RecordingState::Idle) {
                     RecordingState::Capturing { sample_id, buffer } => {
@@ -247,6 +253,7 @@ impl Engine {
                         _ => unreachable!(),
                     };
                     self.recording = RecordingState::Capturing { sample_id, buffer };
+                    self.capturing_flag.store(true, Ordering::Relaxed);
                 }
             }
             RecordingState::Capturing { buffer, .. } => {
