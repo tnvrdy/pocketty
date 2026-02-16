@@ -33,4 +33,5 @@ audio backend built from scratch with cpal (rust audio library), interface built
 - cute ascii animation generation for your songs
 
 art banner made by tanvi :3 source of the dot art on the lcd
+
 template from devpost
