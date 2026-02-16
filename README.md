@@ -1,6 +1,5 @@
 ![IMG_0021](https://github.com/user-attachments/assets/a44cba24-4b24-4716-907e-f40b642aeea4)
 # pocketty - produce music in your terminal
-### we built teenage engineer's pocket operator as a tui
 
 https://github.com/user-attachments/assets/0721553c-cc8c-4d3a-8a0d-319ec5c16ce1
 
